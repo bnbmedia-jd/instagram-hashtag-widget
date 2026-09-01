@@ -66,6 +66,51 @@ file every 15 minutes too, so it never calls Instagram directly.
 
 To trigger a manual refresh without waiting: `POST /api/refresh`.
 
+## Embedding on another site
+
+The feed is served with `Access-Control-Allow-Origin: *`, so it can be embedded
+cross-origin with a script tag. Drop this anywhere in your page:
+
+```html
+<div id="ig-hashtag-feed"></div>
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js" defer></script>
+```
+
+The script injects its own scoped styles (all classes are prefixed `ighw-`),
+renders a responsive grid, and re-fetches every 15 minutes.
+
+Options go on the script tag:
+
+| Attribute | Default | Effect |
+| --- | --- | --- |
+| `data-target` | `ig-hashtag-feed` | ID of the container to render into. If it doesn't exist, the widget renders where the script tag sits. |
+| `data-limit` | all | Maximum number of posts to show. |
+| `data-columns` | auto | Fixed column count. Omit for a responsive grid. |
+| `data-header` | `true` | Set `false` to hide the hashtag title and "updated" line. |
+| `data-feed` | this repo's feed | Override the feed JSON URL. |
+
+Example — six posts, three columns, no header:
+
+```html
+<div id="ig-hashtag-feed"></div>
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js"
+        data-limit="6" data-columns="3" data-header="false" defer></script>
+```
+
+Restyle it by overriding the CSS variables on `.ighw`:
+
+```css
+.ighw { --ighw-gap: 20px; --ighw-radius: 0; --ighw-card: #fff; }
+```
+
+If you'd rather not run third-party JavaScript, an iframe works too, though it
+won't inherit your page's styling:
+
+```html
+<iframe src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/"
+        style="width:100%;height:800px;border:0"></iframe>
+```
+
 ## Notes and limits
 
 - `ig_hashtag_search` (resolving a hashtag name to its ID) is capped at **30
