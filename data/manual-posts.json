@@ -1,10 +1,10 @@
 {
-  "_note": "Hand-curated posts merged into feed.json on every fetch. Use this for posts the Hashtag Search API can't return — Reels older than ~24h, or anything that aged out before the poller saw it. Entries here always win over API data and are never dropped. Give each a unique id starting with 'manual-'. media_url should point at a file you drop in public/manual/ (served at /manual/...).",
+  "_note": "Hand-curated posts merged into feed.json on every fetch. Use this for posts the Hashtag Search API can't return - Reels older than ~24h, or anything that aged out before the poller saw it. Entries here always win over API data and are never dropped. Give each a unique id starting with 'manual-'. media_url should be a path RELATIVE to the site root with no leading slash (e.g. 'manual/photo.jpg' for a file at public/manual/photo.jpg) so it resolves correctly under the GitHub Pages project subpath.",
   "posts": [
     {
       "id": "manual-Dct_zp-yHvo",
       "media_type": "IMAGE",
-      "media_url": "/manual/befestival2026-reel.jpg",
+      "media_url": "manual/befestival2026-reel.jpg",
       "permalink": "https://www.instagram.com/reel/Dct_zp-yHvo/",
       "caption": "TODO: paste the real caption here",
       "username": "TODO-account-handle",

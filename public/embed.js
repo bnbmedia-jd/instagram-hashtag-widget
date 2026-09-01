@@ -77,8 +77,11 @@
 
   function mediaUrl(post) {
     if (!post.media_url) return null;
-    // Manual entries use site-relative paths; API posts are absolute.
-    return new URL(post.media_url, BASE).href;
+    if (/^https?:\/\//i.test(post.media_url)) return post.media_url;
+    // Manual entries are relative to the widget, not to the host page's origin.
+    // Strip any leading slash so they resolve under a project-site subpath
+    // (e.g. /instagram-hashtag-widget/) rather than the domain root.
+    return new URL(post.media_url.replace(/^\/+/, ""), BASE).href;
   }
 
   function renderPost(post) {
