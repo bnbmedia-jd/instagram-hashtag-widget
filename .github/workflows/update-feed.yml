@@ -1,0 +1,74 @@
+name: Update hashtag feed
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub may delay scheduled runs under load; that's
+    # tolerable because Instagram's recent_media window is ~24h.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Never let two runs push to data/ at once.
+concurrency:
+  group: update-feed
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Fetch hashtag feed
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_BUSINESS_ACCOUNT_ID: ${{ secrets.IG_BUSINESS_ACCOUNT_ID }}
+          HASHTAG: ${{ vars.HASHTAG || 'befestival2026' }}
+        run: npm run fetch
+
+      - name: Commit updated feed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/feed.json data/hashtag-id.json
+          if git diff --staged --quiet; then
+            echo "No feed changes to commit."
+          else
+            git commit -m "Update feed [skip ci]"
+            # Rebase in case a concurrent run already pushed.
+            git pull --rebase --autostash origin main
+            git push
+          fi
+
+      - name: Assemble site
+        run: |
+          mkdir -p site/data
+          cp -r public/* site/
+          cp data/feed.json site/data/feed.json
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: fetch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

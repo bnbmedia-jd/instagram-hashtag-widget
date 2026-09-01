@@ -1,0 +1,8 @@
+node_modules/
+.env
+*.log
+
+# data/feed.json and data/hashtag-id.json are deliberately NOT ignored — the
+# repo is the persistence layer for the GitHub Actions poller. feed.json
+# accumulates posts across runs, and hashtag-id.json must survive so the
+# hashtag is never re-resolved (30 unique lookups per rolling 7 days).

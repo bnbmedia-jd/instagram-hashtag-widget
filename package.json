@@ -1,0 +1,16 @@
+{
+  "name": "instagram-hashtag-widget",
+  "version": "1.0.0",
+  "description": "Polls the Instagram Graph API Hashtag Search endpoint every 15 minutes and serves the results as a website widget.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "fetch": "node src/fetchFeed.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3"
+  }
+}
