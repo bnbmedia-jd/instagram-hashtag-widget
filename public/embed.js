@@ -40,6 +40,7 @@
 .ighw-post:hover{transform:translateY(-2px);}
 .ighw-media{position:relative;aspect-ratio:1/1;background:var(--ighw-border);}
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
+.ighw-nomedia{background:linear-gradient(135deg,var(--ighw-card),var(--ighw-border));}
 .ighw-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;
   font-size:.7em;padding:2px 6px;border-radius:4px;line-height:1.4;}
 .ighw-body{padding:10px 12px 12px;}
@@ -97,13 +98,23 @@
     return "just now";
   }
 
-  function mediaUrl(post) {
-    if (!post.media_url) return null;
-    if (/^https?:\/\//i.test(post.media_url)) return post.media_url;
+  function resolveUrl(url) {
+    if (!url) return null;
+    if (/^https?:\/\//i.test(url)) return url;
     // Manual entries are relative to the widget, not to the host page's origin.
     // Strip any leading slash so they resolve under a project-site subpath
     // (e.g. /instagram-hashtag-widget/) rather than the domain root.
-    return new URL(post.media_url.replace(/^\/+/, ""), BASE).href;
+    return new URL(url.replace(/^\/+/, ""), BASE).href;
+  }
+
+  // business_discovery omits media_url for video from accounts we don't own —
+  // only a thumbnail comes back — so the still is what we can always render,
+  // and the video file is a bonus when it happens to be present.
+  function mediaFor(post) {
+    return {
+      video: post.media_type === "VIDEO" ? resolveUrl(post.media_url) : null,
+      still: resolveUrl(post.thumbnail_url || post.media_url),
+    };
   }
 
   function renderPost(post) {
@@ -113,20 +124,25 @@
     link.rel = "noopener noreferrer";
 
     const wrap = el("div", "ighw-media");
-    const src = mediaUrl(post);
-    if (src && post.media_type === "VIDEO" && !post.manual) {
+    const { video, still } = mediaFor(post);
+    if (video && !post.manual) {
       const v = el("video");
-      v.src = src;
+      v.src = video;
+      if (still) v.poster = still;
       v.muted = true; v.loop = true; v.playsInline = true; v.preload = "metadata";
       wrap.addEventListener("mouseenter", () => v.play().catch(() => {}));
       wrap.addEventListener("mouseleave", () => v.pause());
       wrap.appendChild(v);
-    } else if (src) {
+    } else if (still) {
       const img = el("img");
-      img.src = src;
+      img.src = still;
       img.alt = "";
       img.loading = "lazy";
+      // A dead CDN link shouldn't leave a broken-image icon in the layout.
+      img.addEventListener("error", () => { img.remove(); wrap.classList.add("ighw-nomedia"); });
       wrap.appendChild(img);
+    } else {
+      wrap.classList.add("ighw-nomedia");
     }
     if (post.media_type === "CAROUSEL_ALBUM") wrap.appendChild(el("span", "ighw-badge", "◫"));
     if (post.media_type === "VIDEO") wrap.appendChild(el("span", "ighw-badge", "▶"));

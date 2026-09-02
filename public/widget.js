@@ -23,10 +23,16 @@ function timeAgo(isoString) {
 }
 
 function renderPost(post) {
-  const isVideo = post.media_type === "VIDEO";
-  const mediaTag = isVideo
-    ? `<video src="${post.media_url}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
-    : `<img src="${post.media_type === "CAROUSEL_ALBUM" ? post.media_url : post.media_url}" alt="" loading="lazy" />`;
+  // business_discovery returns no media_url for video from accounts we don't
+  // own, only a thumbnail — so fall back to the still rather than rendering an
+  // empty src.
+  const still = post.thumbnail_url || post.media_url;
+  const mediaTag =
+    post.media_type === "VIDEO" && post.media_url
+      ? `<video src="${post.media_url}" poster="${still || ""}" muted loop playsinline onmouseover="this.play()" onmouseout="this.pause()"></video>`
+      : still
+        ? `<img src="${still}" alt="" loading="lazy" />`
+        : "";
 
   return `
     <a class="post" href="${post.permalink}" target="_blank" rel="noopener noreferrer">
