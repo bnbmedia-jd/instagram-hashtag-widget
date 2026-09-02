@@ -113,10 +113,35 @@ Options go on the script tag:
 | Attribute | Default | Effect |
 | --- | --- | --- |
 | `data-target` | `ig-hashtag-feed` | ID of the container to render into. If it doesn't exist, the widget renders where the script tag sits. |
+| `data-layout` | `grid` | `grid` for a full gallery, `row` for a single horizontally-scrolling row. |
 | `data-limit` | all | Maximum number of posts to show. |
-| `data-columns` | auto | Fixed column count. Omit for a responsive grid. |
+| `data-columns` | auto | Fixed column count (grid layout only). Omit for a responsive grid. |
+| `data-card-width` | `240px` | Card width in row layout. |
 | `data-header` | `true` | Set `false` to hide the hashtag title and "updated" line. |
 | `data-feed` | this repo's feed | Override the feed JSON URL. |
+
+### Single row
+
+```html
+<div id="ig-feed-row"></div>
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js"
+        data-target="ig-feed-row" data-layout="row" data-limit="12" defer></script>
+```
+
+Scrolls horizontally with snap points. Touch and trackpad scrolling work
+natively; arrow buttons appear for mouse users on screens wider than 600px and
+hide themselves at each end of the range.
+
+### Full gallery
+
+```html
+<div id="ig-feed-gallery"></div>
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js"
+        data-target="ig-feed-gallery" defer></script>
+```
+
+Both can live on the same page — give each its own container and
+`data-target`.
 
 Example — six posts, three columns, no header:
 

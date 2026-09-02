@@ -18,6 +18,8 @@
   const TARGET_ID = script.dataset.target || "ig-hashtag-feed";
   const LIMIT = parseInt(script.dataset.limit || "0", 10) || Infinity;
   const COLUMNS = script.dataset.columns || "";
+  const LAYOUT = script.dataset.layout === "row" ? "row" : "grid";
+  const CARD_WIDTH = script.dataset.cardWidth || "240px";
   const SHOW_HEADER = script.dataset.header !== "false";
   const REFRESH_MS = 15 * 60 * 1000;
 
@@ -45,6 +47,26 @@
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 .ighw-meta{font-size:.75em;color:var(--ighw-muted);margin:0;}
 .ighw-empty{color:var(--ighw-muted);font-size:.9em;padding:1.5em 0;text-align:center;grid-column:1/-1;}
+
+/* Single-row carousel. Native scroll with snap points, so touch and trackpad
+   work without JS; the arrows exist for mouse users on desktop. */
+.ighw-rail{position:relative;}
+.ighw-grid.ighw-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+  scroll-behavior:smooth;padding-bottom:6px;-webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;}
+.ighw-grid.ighw-row::-webkit-scrollbar{height:6px;}
+.ighw-grid.ighw-row::-webkit-scrollbar-thumb{background:var(--ighw-border);border-radius:3px;}
+.ighw-row .ighw-post{flex:0 0 var(--ighw-card-w,240px);scroll-snap-align:start;}
+.ighw-row .ighw-empty{flex:1 1 auto;}
+.ighw-nav{position:absolute;top:calc(50% - 18px);width:36px;height:36px;border-radius:50%;
+  border:1px solid var(--ighw-border);background:rgba(255,255,255,.92);color:#222;
+  cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;
+  justify-content:center;padding:0;z-index:2;transition:opacity .15s ease;}
+@media (prefers-color-scheme:dark){.ighw-nav{background:rgba(30,30,30,.92);color:#eee;}}
+.ighw-nav:disabled{opacity:0;pointer-events:none;}
+.ighw-nav-prev{left:-14px;}
+.ighw-nav-next{right:-14px;}
+@media (max-width:600px){.ighw-nav{display:none;}}
 `;
 
   function injectStyles() {
@@ -144,11 +166,43 @@
       const frag = document.createDocumentFragment();
       posts.forEach((p) => frag.appendChild(renderPost(p)));
       grid.appendChild(frag);
+      if (grid.ighwSync) setTimeout(grid.ighwSync, 50);
     } catch (err) {
       grid.textContent = "";
       grid.appendChild(el("p", "ighw-empty", "Feed unavailable."));
       if (window.console) console.warn("[ig-hashtag-widget]", err.message);
     }
+  }
+
+  // Wraps the row in a positioned container with arrow buttons, and keeps the
+  // buttons disabled at each end of the scroll range.
+  function buildRail(grid) {
+    const rail = el("div", "ighw-rail");
+    const prev = el("button", "ighw-nav ighw-nav-prev", "\u2039");
+    const next = el("button", "ighw-nav ighw-nav-next", "\u203A");
+    prev.type = next.type = "button";
+    prev.setAttribute("aria-label", "Previous posts");
+    next.setAttribute("aria-label", "Next posts");
+
+    const step = () => Math.max(grid.clientWidth * 0.8, 200);
+    prev.addEventListener("click", () => grid.scrollBy({ left: -step(), behavior: "smooth" }));
+    next.addEventListener("click", () => grid.scrollBy({ left: step(), behavior: "smooth" }));
+
+    const sync = () => {
+      const max = grid.scrollWidth - grid.clientWidth;
+      prev.disabled = grid.scrollLeft <= 2;
+      next.disabled = grid.scrollLeft >= max - 2;
+    };
+    grid.addEventListener("scroll", sync, { passive: true });
+    window.addEventListener("resize", sync);
+    // Re-check once content has been inserted and laid out.
+    setTimeout(sync, 50);
+    grid.ighwSync = sync;
+
+    rail.appendChild(prev);
+    rail.appendChild(grid);
+    rail.appendChild(next);
+    return rail;
   }
 
   function init() {
@@ -170,8 +224,14 @@
       root.appendChild(head);
     }
     const grid = el("div", "ighw-grid");
-    if (COLUMNS) grid.style.gridTemplateColumns = "repeat(" + COLUMNS + ",1fr)";
-    root.appendChild(grid);
+    if (LAYOUT === "row") {
+      grid.classList.add("ighw-row");
+      grid.style.setProperty("--ighw-card-w", CARD_WIDTH);
+      root.appendChild(buildRail(grid));
+    } else {
+      if (COLUMNS) grid.style.gridTemplateColumns = "repeat(" + COLUMNS + ",1fr)";
+      root.appendChild(grid);
+    }
     host.appendChild(root);
 
     load(root);
