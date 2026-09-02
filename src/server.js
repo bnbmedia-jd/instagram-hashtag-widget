@@ -24,10 +24,12 @@ app.post("/api/refresh", async (_req, res) => {
 
 async function runFetch() {
   try {
-    const { posts, added, fromApi } = await fetchFeed();
+    const { posts, added, fromApi, fromAccounts, accountErrors } = await fetchFeed();
     console.log(
-      `[${new Date().toISOString()}] #${process.env.HASHTAG}: ${fromApi} in API, ${added} new, ${posts.length} total`
+      `[${new Date().toISOString()}] #${process.env.HASHTAG}: ${fromApi} via hashtag, ` +
+        `${fromAccounts} via accounts, ${added} new, ${posts.length} total`
     );
+    for (const err of accountErrors) console.warn(`  account fetch failed — ${err}`);
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Fetch failed:`, err.message);
   }

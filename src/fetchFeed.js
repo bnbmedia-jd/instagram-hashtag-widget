@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { resolveHashtagId, fetchHashtagMedia } from "./instagram.js";
+import { resolveHashtagId, fetchHashtagMedia, fetchAccountMedia } from "./instagram.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "..", "data");
 const HASHTAG_ID_FILE = path.join(DATA_DIR, "hashtag-id.json");
@@ -15,6 +15,14 @@ const MANUAL_FILE = path.join(DATA_DIR, "manual-posts.json");
 const MAX_POSTS = 500;
 
 const { IG_ACCESS_TOKEN, IG_BUSINESS_ACCOUNT_ID, HASHTAG } = process.env;
+
+// Comma-separated Business/Creator usernames to follow via business_discovery,
+// which has no ~24h window and returns Reels. Hashtag search catches people we
+// can't name in advance; this catches the accounts we can.
+const ACCOUNTS = (process.env.IG_ACCOUNTS || "")
+  .split(",")
+  .map((name) => name.trim().replace(/^@/, ""))
+  .filter(Boolean);
 
 async function readJson(file, fallback) {
   try {
@@ -50,6 +58,20 @@ export async function fetchFeed() {
     fetchHashtagMedia(hashtagId, IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, "top_media"),
   ]);
 
+  // One bad account (renamed, switched to personal, missing permission) must
+  // not lose the whole run, so each is settled independently.
+  const discovered = [];
+  const accountErrors = [];
+  const results = await Promise.allSettled(
+    ACCOUNTS.map((name) =>
+      fetchAccountMedia(IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, name)
+    )
+  );
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled") discovered.push(...result.value);
+    else accountErrors.push(`@${ACCOUNTS[i]}: ${result.reason.message}`);
+  });
+
   const previous = (await readJson(FEED_FILE, {}))?.posts ?? [];
   const manual = (await readJson(MANUAL_FILE, []))?.posts ?? [];
 
@@ -57,7 +79,7 @@ export async function fetchFeed() {
   // posts we already had, and hand-curated entries override both.
   const byId = new Map();
   for (const post of previous) byId.set(post.id, post);
-  for (const post of [...top, ...recent]) {
+  for (const post of [...top, ...recent, ...discovered]) {
     byId.set(post.id, { ...byId.get(post.id), ...post });
   }
   for (const post of manual) byId.set(post.id, { ...post, manual: true });
@@ -74,16 +96,24 @@ export async function fetchFeed() {
     JSON.stringify({ hashtag: HASHTAG, updatedAt: new Date().toISOString(), posts }, null, 2)
   );
 
-  return { posts, added, fromApi: new Set([...top, ...recent].map((p) => p.id)).size };
+  return {
+    posts,
+    added,
+    fromApi: new Set([...top, ...recent].map((p) => p.id)).size,
+    fromAccounts: new Set(discovered.map((p) => p.id)).size,
+    accountErrors,
+  };
 }
 
 // Allow `npm run fetch` to run this directly, once, outside the server.
 if (import.meta.url === `file://${process.argv[1]}`) {
   fetchFeed()
-    .then(({ posts, added, fromApi }) => {
+    .then(({ posts, added, fromApi, fromAccounts, accountErrors }) => {
       console.log(
-        `#${HASHTAG}: ${fromApi} post(s) visible in API, ${added} new, ${posts.length} total in feed`
+        `#${HASHTAG}: ${fromApi} via hashtag, ${fromAccounts} via accounts, ` +
+          `${added} new, ${posts.length} total in feed`
       );
+      for (const err of accountErrors) console.warn(`  account fetch failed — ${err}`);
     })
     .catch((err) => {
       console.error(err.message);

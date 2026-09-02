@@ -66,6 +66,35 @@ file every 15 minutes too, so it never calls Instagram directly.
 
 To trigger a manual refresh without waiting: `POST /api/refresh`.
 
+## Following specific accounts (business_discovery)
+
+Hashtag search only exposes a narrow window — roughly the last day for
+`recent_media`, and `top_media` never returns Reels. That's fine for catching
+attendees you can't name in advance, but unreliable for accounts you care about
+specifically.
+
+`business_discovery` queries a named public Business/Creator account directly:
+no time window, no hashtag quota, and Reels are returned normally. Set
+`IG_ACCOUNTS` to a comma-separated list of usernames:
+
+```
+IG_ACCOUNTS=bodynbrain.us,anotheraccount
+```
+
+Their posts are merged into the same accumulating feed and deduplicated by
+media ID, so a post that appears via both the hashtag and an account is stored
+once.
+
+**This requires `instagram_manage_insights` on your token** in addition to
+`instagram_basic` and `pages_show_list`. It's Standard Access — no App Review —
+but a token generated without it fails with `(#10) Application does not have
+permission for this action`. Account fetches are settled independently, so a
+missing permission or a renamed account is logged and skipped rather than
+failing the run.
+
+Only Business/Creator accounts are discoverable; personal accounts return
+nothing.
+
 ## Embedding on another site
 
 The feed is served with `Access-Control-Allow-Origin: *`, so it can be embedded
