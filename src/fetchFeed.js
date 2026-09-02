@@ -24,6 +24,20 @@ const ACCOUNTS = (process.env.IG_ACCOUNTS || "")
   .map((name) => name.trim().replace(/^@/, ""))
   .filter(Boolean);
 
+// Optional cutoff (e.g. "2026-08-25"). Posts published before it are dropped
+// from the feed, including ones already accumulated. Bare dates are read as
+// UTC midnight. Hand-curated entries in manual-posts.json are exempt.
+const SINCE = (() => {
+  const raw = (process.env.IG_SINCE || "").trim();
+  if (!raw) return null;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00Z` : raw);
+  if (isNaN(date)) {
+    console.warn(`Ignoring unparseable IG_SINCE value: ${raw}`);
+    return null;
+  }
+  return date;
+})();
+
 async function readJson(file, fallback) {
   try {
     return JSON.parse(await readFile(file, "utf-8"));
@@ -84,11 +98,17 @@ export async function fetchFeed() {
   }
   for (const post of manual) byId.set(post.id, { ...post, manual: true });
 
-  const posts = [...byId.values()]
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, MAX_POSTS);
+  const all = [...byId.values()].sort(
+    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+  );
+  const kept = SINCE
+    ? all.filter((post) => post.manual || new Date(post.timestamp) >= SINCE)
+    : all;
+  const posts = kept.slice(0, MAX_POSTS);
+  const excluded = all.length - kept.length;
 
-  const added = posts.length - previous.length;
+  const previousIds = new Set(previous.map((post) => post.id));
+  const added = posts.filter((post) => !previousIds.has(post.id)).length;
 
   // Only bump updatedAt when the posts actually changed. Rewriting it on every
   // poll would make the file differ every run, which under the GitHub Actions
@@ -109,16 +129,18 @@ export async function fetchFeed() {
     fromAccounts: new Set(discovered.map((p) => p.id)).size,
     accountErrors,
     changed,
+    excluded,
   };
 }
 
 // Allow `npm run fetch` to run this directly, once, outside the server.
 if (import.meta.url === `file://${process.argv[1]}`) {
   fetchFeed()
-    .then(({ posts, added, fromApi, fromAccounts, accountErrors }) => {
+    .then(({ posts, added, fromApi, fromAccounts, accountErrors, excluded }) => {
       console.log(
         `#${HASHTAG}: ${fromApi} via hashtag, ${fromAccounts} via accounts, ` +
-          `${added} new, ${posts.length} total in feed`
+          `${added} new, ${posts.length} total in feed` +
+          (excluded ? ` (${excluded} before cutoff excluded)` : "")
       );
       for (const err of accountErrors) console.warn(`  account fetch failed — ${err}`);
     })

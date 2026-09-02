@@ -85,6 +85,18 @@ Their posts are merged into the same accumulating feed and deduplicated by
 media ID, so a post that appears via both the hashtag and an account is stored
 once.
 
+Set `IG_SINCE` to drop posts published before a given date (UTC), which is
+useful when you only care about an event window rather than an account's whole
+back catalogue:
+
+```
+IG_SINCE=2026-08-25
+```
+
+The cutoff applies to the entire feed, including posts already accumulated, so
+lowering it will not bring old posts back unless the API still returns them.
+Entries in `manual-posts.json` are exempt.
+
 **This requires `instagram_manage_insights` on your token** in addition to
 `instagram_basic` and `pages_show_list`. It's Standard Access — no App Review —
 but a token generated without it fails with `(#10) Application does not have
