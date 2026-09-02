@@ -90,11 +90,17 @@ export async function fetchFeed() {
 
   const added = posts.length - previous.length;
 
+  // Only bump updatedAt when the posts actually changed. Rewriting it on every
+  // poll would make the file differ every run, which under the GitHub Actions
+  // setup means a commit every 15 minutes forever.
+  const changed = JSON.stringify(posts) !== JSON.stringify(previous);
+  const previousUpdatedAt = (await readJson(FEED_FILE, {}))?.updatedAt;
+  const updatedAt = changed || !previousUpdatedAt
+    ? new Date().toISOString()
+    : previousUpdatedAt;
+
   await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(
-    FEED_FILE,
-    JSON.stringify({ hashtag: HASHTAG, updatedAt: new Date().toISOString(), posts }, null, 2)
-  );
+  await writeFile(FEED_FILE, JSON.stringify({ hashtag: HASHTAG, updatedAt, posts }, null, 2));
 
   return {
     posts,
@@ -102,6 +108,7 @@ export async function fetchFeed() {
     fromApi: new Set([...top, ...recent].map((p) => p.id)).size,
     fromAccounts: new Set(discovered.map((p) => p.id)).size,
     accountErrors,
+    changed,
   };
 }
 
