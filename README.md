@@ -130,6 +130,7 @@ Options go on the script tag:
 | `data-columns` | auto | Fixed column count (grid layout only). Omit for a responsive grid. |
 | `data-card-width` | `240px` | Card width in row layout. |
 | `data-header` | `true` | Set `false` to hide the hashtag title and "updated" line. |
+| `data-lightbox` | `true` | Set `false` to link straight to Instagram instead of opening the in-page lightbox. |
 | `data-feed` | this repo's feed | Override the feed JSON URL. |
 
 ### Single row
@@ -154,6 +155,21 @@ hide themselves at each end of the range.
 
 Both can live on the same page — give each its own container and
 `data-target`.
+
+### Lightbox
+
+Clicking a post opens an in-page lightbox with the full-size still, the
+complete caption, and like/comment counts. Arrow keys and on-screen arrows move
+between posts, Escape or a backdrop click closes it, and "View on Instagram"
+opens a sized popup window so your page is never navigated away from.
+Cmd/Ctrl-click still opens the post in a new tab as normal.
+
+Note that the Reel itself cannot be played in the lightbox. Instagram serves
+`X-Frame-Options: DENY` on its embed URLs, and the Graph API returns no
+`media_url` for video belonging to accounts the token doesn't own — so the
+still plus a hand-off to Instagram is as close as the platform allows.
+
+Set `data-lightbox="false"` to go straight to Instagram on click instead.
 
 Example — six posts, three columns, no header:
 

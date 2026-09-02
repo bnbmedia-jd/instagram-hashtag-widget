@@ -20,6 +20,7 @@
   const COLUMNS = script.dataset.columns || "";
   const LAYOUT = script.dataset.layout === "row" ? "row" : "grid";
   const CARD_WIDTH = script.dataset.cardWidth || "240px";
+  const LIGHTBOX = script.dataset.lightbox !== "false";
   const SHOW_HEADER = script.dataset.header !== "false";
   const REFRESH_MS = 15 * 60 * 1000;
 
@@ -40,6 +41,33 @@
 .ighw-post:hover{transform:translateY(-2px);}
 .ighw-media{position:relative;aspect-ratio:1/1;background:var(--ighw-border);}
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
+.ighw-lb{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;
+  justify-content:center;background:rgba(0,0,0,.82);padding:4vh 4vw;}
+.ighw-lb[hidden]{display:none;}
+.ighw-lb-card{background:#fff;color:#111;border-radius:12px;overflow:hidden;
+  max-width:940px;width:100%;max-height:92vh;display:flex;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+@media (prefers-color-scheme:dark){.ighw-lb-card{background:#1a1a1a;color:#eee;}}
+.ighw-lb-media{flex:1 1 55%;background:#000;display:flex;align-items:center;justify-content:center;min-width:0;}
+.ighw-lb-media img{width:100%;height:100%;max-height:92vh;object-fit:contain;display:block;}
+.ighw-lb-side{flex:1 1 45%;padding:22px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;min-width:0;}
+.ighw-lb-user{font-weight:600;font-size:.95em;margin:0;}
+.ighw-lb-time{font-size:.8em;opacity:.65;margin:0;}
+.ighw-lb-caption{font-size:.9em;line-height:1.55;margin:0;white-space:pre-wrap;word-wrap:break-word;}
+.ighw-lb-stats{font-size:.82em;opacity:.7;margin:0;}
+.ighw-lb-open{display:inline-block;margin-top:auto;padding:10px 16px;border-radius:8px;
+  background:#0095f6;color:#fff;text-decoration:none;font-size:.88em;font-weight:600;
+  text-align:center;border:0;cursor:pointer;}
+.ighw-lb-x{position:absolute;top:14px;right:18px;background:none;border:0;color:#fff;
+  font-size:30px;line-height:1;cursor:pointer;padding:4px 10px;}
+.ighw-lb-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);
+  border:0;color:#fff;font-size:26px;cursor:pointer;padding:12px 16px;border-radius:8px;}
+.ighw-lb-nav:disabled{opacity:.25;cursor:default;}
+.ighw-lb-prev{left:12px;} .ighw-lb-next{right:12px;}
+@media (max-width:760px){
+  .ighw-lb-card{flex-direction:column;}
+  .ighw-lb-media{max-height:45vh;} .ighw-lb-media img{max-height:45vh;}
+  .ighw-lb-nav{display:none;}
+}
 .ighw-nomedia{background:linear-gradient(135deg,var(--ighw-card),var(--ighw-border));}
 .ighw-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;
   font-size:.7em;padding:2px 6px;border-radius:4px;line-height:1.4;}
@@ -117,11 +145,20 @@
     };
   }
 
-  function renderPost(post) {
+  function renderPost(post, posts, index) {
     const link = el("a", "ighw-post");
     link.href = post.permalink || "#";
     link.target = "_blank";
     link.rel = "noopener noreferrer";
+    if (LIGHTBOX) {
+      // Left-click opens the lightbox; modified clicks keep normal link
+      // behaviour so "open in new tab" still works.
+      link.addEventListener("click", (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        openLightbox(posts, index);
+      });
+    }
 
     const wrap = el("div", "ighw-media");
     const { video, still } = mediaFor(post);
@@ -180,7 +217,7 @@
         return;
       }
       const frag = document.createDocumentFragment();
-      posts.forEach((p) => frag.appendChild(renderPost(p)));
+      posts.forEach((p, i) => frag.appendChild(renderPost(p, posts, i)));
       grid.appendChild(frag);
       if (grid.ighwSync) setTimeout(grid.ighwSync, 50);
     } catch (err) {
@@ -188,6 +225,113 @@
       grid.appendChild(el("p", "ighw-empty", "Feed unavailable."));
       if (window.console) console.warn("[ig-hashtag-widget]", err.message);
     }
+  }
+
+  // Instagram sends X-Frame-Options: DENY on its embed URLs, and the API
+  // withholds media_url for video from accounts we don't own, so the post
+  // itself cannot be played in-page. The lightbox shows the still at size with
+  // the full caption, and hands off to Instagram in a popup window.
+  let lb = null;
+  let lbPosts = [];
+  let lbIndex = 0;
+  let lastFocus = null;
+
+  function buildLightbox() {
+    const overlay = el("div", "ighw-lb");
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Post detail");
+
+    const close = el("button", "ighw-lb-x", "\u00D7");
+    close.type = "button";
+    close.setAttribute("aria-label", "Close");
+
+    const prev = el("button", "ighw-lb-nav ighw-lb-prev", "\u2039");
+    const next = el("button", "ighw-lb-nav ighw-lb-next", "\u203A");
+    prev.type = next.type = "button";
+    prev.setAttribute("aria-label", "Previous post");
+    next.setAttribute("aria-label", "Next post");
+
+    const card = el("div", "ighw-lb-card");
+    const media = el("div", "ighw-lb-media");
+    const side = el("div", "ighw-lb-side");
+    const user = el("p", "ighw-lb-user", "");
+    const time = el("p", "ighw-lb-time", "");
+    const caption = el("p", "ighw-lb-caption", "");
+    const stats = el("p", "ighw-lb-stats", "");
+    const open = el("a", "ighw-lb-open", "View on Instagram");
+    open.rel = "noopener noreferrer";
+    side.append(user, time, caption, stats, open);
+    card.append(media, side);
+    overlay.append(close, prev, card, next);
+
+    close.addEventListener("click", closeLightbox);
+    prev.addEventListener("click", () => showAt(lbIndex - 1));
+    next.addEventListener("click", () => showAt(lbIndex + 1));
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeLightbox(); });
+
+    // Open Instagram in a sized popup so the host page is never navigated away.
+    open.addEventListener("click", (e) => {
+      e.preventDefault();
+      const w = window.open(open.href, "ighw_instagram",
+        "width=480,height=880,scrollbars=yes,resizable=yes");
+      if (!w) window.open(open.href, "_blank", "noopener");
+    });
+
+    document.body.appendChild(overlay);
+    lb = { overlay, media, user, time, caption, stats, open, prev, next };
+    return lb;
+  }
+
+  function showAt(i) {
+    if (i < 0 || i >= lbPosts.length) return;
+    lbIndex = i;
+    const post = lbPosts[i];
+    const { still } = mediaFor(post);
+
+    lb.media.textContent = "";
+    if (still) {
+      const img = el("img");
+      img.src = still;
+      img.alt = "";
+      lb.media.appendChild(img);
+    }
+    lb.user.textContent = post.username ? "@" + post.username : "";
+    lb.time.textContent = post.timestamp ? timeAgo(post.timestamp) : "";
+    lb.caption.textContent = post.caption || "";
+    const stats = [];
+    if (typeof post.like_count === "number") stats.push(post.like_count + " likes");
+    if (typeof post.comments_count === "number") stats.push(post.comments_count + " comments");
+    lb.stats.textContent = stats.join(" \u00B7 ");
+    lb.open.href = post.permalink || "#";
+    lb.prev.disabled = i === 0;
+    lb.next.disabled = i === lbPosts.length - 1;
+  }
+
+  function onKey(e) {
+    if (e.key === "Escape") closeLightbox();
+    else if (e.key === "ArrowLeft") showAt(lbIndex - 1);
+    else if (e.key === "ArrowRight") showAt(lbIndex + 1);
+  }
+
+  function openLightbox(posts, i) {
+    if (!lb) buildLightbox();
+    lbPosts = posts;
+    lastFocus = document.activeElement;
+    lb.overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    showAt(i);
+    lb.open.focus();
+  }
+
+  function closeLightbox() {
+    if (!lb) return;
+    lb.overlay.hidden = true;
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onKey);
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
 
   // Wraps the row in a positioned container with arrow buttons, and keeps the
