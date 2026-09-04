@@ -239,6 +239,24 @@ minimum 15) if you want a different cadence:
         data-refresh="30" defer></script>
 ```
 
+## Removing a post from the feed
+
+The feed accumulates and never drops posts on its own, so deleting a post on
+Instagram does not remove it from the widget. Add it to `data/blocked.json`
+instead:
+
+```json
+{
+  "ids": ["18627943273063054"],
+  "shortcodes": ["Dc2to9fMWFn"]
+}
+```
+
+Either field works — `ids` matches the media ID, `shortcodes` matches the part
+of a permalink after `/p/` or `/reel/`, which is easier to copy from a browser.
+Filtering runs after every fetch, so blocked posts stay out permanently even
+though the API keeps returning them. Delete the entry to let a post back in.
+
 ## Notes and limits
 
 - `ig_hashtag_search` (resolving a hashtag name to its ID) is capped at **30

@@ -19,6 +19,7 @@ const DATA_DIR = path.join(import.meta.dirname, "..", "data");
 const HASHTAG_ID_FILE = path.join(DATA_DIR, "hashtag-id.json");
 const FEED_FILE = path.join(DATA_DIR, "feed.json");
 const MANUAL_FILE = path.join(DATA_DIR, "manual-posts.json");
+const BLOCKED_FILE = path.join(DATA_DIR, "blocked.json");
 
 // Hashtag search only exposes a narrow window: recent_media covers roughly the
 // last day, and top_media excludes Reels entirely. Posts therefore vanish from
@@ -127,6 +128,18 @@ export async function fetchFeed() {
     byId.set(post.id, { ...byId.get(post.id), ...post });
   }
   for (const post of manual) byId.set(post.id, { ...post, manual: true });
+
+  // Blocked posts are removed after merging, so they stay out even though the
+  // API keeps returning them and they may already be in the accumulated feed.
+  const blocked = await readJson(BLOCKED_FILE, {});
+  const blockedIds = new Set(blocked?.ids ?? []);
+  const blockedCodes = (blocked?.shortcodes ?? []).filter(Boolean);
+  const isBlocked = (post) =>
+    blockedIds.has(post.id) ||
+    blockedCodes.some((code) => (post.permalink || "").includes(code));
+  for (const id of [...byId.keys()]) {
+    if (isBlocked(byId.get(id))) byId.delete(id);
+  }
 
   const all = [...byId.values()].sort(
     (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
