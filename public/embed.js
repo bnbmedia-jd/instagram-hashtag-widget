@@ -62,10 +62,16 @@
 .ighw-post:hover{transform:translateY(-2px);}
 .ighw-media{position:relative;aspect-ratio:1/1;background:var(--ighw-border);}
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
-.ighw-add{display:block;width:100%;padding:16px;margin:0 0 var(--ighw-gap);
-  font:inherit;font-size:1.02em;font-weight:600;color:#fff;background:#0095f6;
-  border:0;border-radius:var(--ighw-radius);cursor:pointer;text-align:center;}
-.ighw-add:hover{filter:brightness(1.06);}
+/* Outlined rather than filled, for dark backgrounds. Override --ighw-add-fg on
+   .ighw if the host page is light. Full width on phones, intrinsic on desktop. */
+.ighw-add{display:block;width:100%;padding:14px 30px;margin:0 auto var(--ighw-gap);
+  font:inherit;font-size:1.02em;font-weight:600;
+  color:var(--ighw-add-fg,#fff);background:transparent;
+  border:1.5px solid var(--ighw-add-fg,#fff);
+  border-radius:var(--ighw-radius);cursor:pointer;text-align:center;
+  transition:background-color .15s ease;}
+.ighw-add:hover{background-color:rgba(255,255,255,.12);}
+@media (min-width:600px){.ighw-add{width:auto;}}
 .ighw-add:disabled{opacity:.6;cursor:default;}
 .ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-6px 0 var(--ighw-gap);text-align:center;}
 .ighw-form{position:fixed;inset:0;z-index:99998;display:flex;align-items:center;
