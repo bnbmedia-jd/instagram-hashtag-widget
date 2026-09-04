@@ -73,3 +73,16 @@ export async function fetchAccountMedia(businessAccountId, accessToken, username
     source: "account",
   }));
 }
+
+// Fetches the authenticated account's own media. Unlike business_discovery,
+// this returns a real media_url for video — Instagram only hands over video
+// files for accounts the token actually owns — so Reels can be played inline.
+export async function fetchOwnMedia(businessAccountId, accessToken, limit = 25) {
+  const data = await graphGet(`${businessAccountId}/media`, {
+    fields: `${DISCOVERY_MEDIA_FIELDS},username,media_product_type`,
+    limit,
+    access_token: accessToken,
+  });
+
+  return (data?.data || []).map((post) => ({ ...post, source: "self" }));
+}

@@ -48,7 +48,7 @@
   max-width:940px;width:100%;max-height:92vh;display:flex;box-shadow:0 20px 60px rgba(0,0,0,.4);}
 @media (prefers-color-scheme:dark){.ighw-lb-card{background:#1a1a1a;color:#eee;}}
 .ighw-lb-media{flex:1 1 55%;background:#000;display:flex;align-items:center;justify-content:center;min-width:0;}
-.ighw-lb-media img{width:100%;height:100%;max-height:92vh;object-fit:contain;display:block;}
+.ighw-lb-media img,.ighw-lb-media video{width:100%;height:100%;max-height:92vh;object-fit:contain;display:block;}
 .ighw-lb-side{flex:1 1 45%;padding:22px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;min-width:0;}
 .ighw-lb-user{font-weight:600;font-size:.95em;margin:0;}
 .ighw-lb-time{font-size:.8em;opacity:.65;margin:0;}
@@ -65,7 +65,8 @@
 .ighw-lb-prev{left:12px;} .ighw-lb-next{right:12px;}
 @media (max-width:760px){
   .ighw-lb-card{flex-direction:column;}
-  .ighw-lb-media{max-height:45vh;} .ighw-lb-media img{max-height:45vh;}
+  .ighw-lb-media{max-height:45vh;}
+  .ighw-lb-media img,.ighw-lb-media video{max-height:45vh;}
   .ighw-lb-nav{display:none;}
 }
 .ighw-nomedia{background:linear-gradient(135deg,var(--ighw-card),var(--ighw-border));}
@@ -291,7 +292,20 @@
     const { still } = mediaFor(post);
 
     lb.media.textContent = "";
-    if (still) {
+    const { video } = mediaFor(post);
+    if (video && !post.manual) {
+      // Only available for accounts the token owns; otherwise we fall back to
+      // the still and hand off to Instagram.
+      const v = el("video");
+      v.src = video;
+      if (still) v.poster = still;
+      v.controls = true;
+      v.autoplay = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.muted = true;
+      lb.media.appendChild(v);
+    } else if (still) {
       const img = el("img");
       img.src = still;
       img.alt = "";
@@ -328,6 +342,8 @@
 
   function closeLightbox() {
     if (!lb) return;
+    const playing = lb.media.querySelector("video");
+    if (playing) playing.pause();
     lb.overlay.hidden = true;
     document.body.style.overflow = "";
     document.removeEventListener("keydown", onKey);

@@ -107,6 +107,29 @@ failing the run.
 Only Business/Creator accounts are discoverable; personal accounts return
 nothing.
 
+## Playing Reels inline (own-account media)
+
+`business_discovery` returns `media_url: null` for video, because Instagram
+only releases video files to the account that owns them. A Reel from another
+account can therefore only ever be shown as a still.
+
+If the token is issued for the account you want to feature, its own media edge
+returns real video URLs and Reels play inline. Set:
+
+```
+IG_INCLUDE_SELF=true
+```
+
+and the authenticated account's own posts are fetched alongside (or instead of)
+the `IG_ACCOUNTS` list. Drop that account from `IG_ACCOUNTS` when you do —
+own-account media is strictly better, returning playable video plus
+`media_product_type`.
+
+Switching the token to a different account means re-pointing both
+`IG_ACCESS_TOKEN` and `IG_BUSINESS_ACCOUNT_ID`; they must belong together. The
+cached hashtag ID stays valid, since hashtag IDs are global rather than
+per-account.
+
 ## Embedding on another site
 
 The feed is served with `Access-Control-Allow-Origin: *`, so it can be embedded

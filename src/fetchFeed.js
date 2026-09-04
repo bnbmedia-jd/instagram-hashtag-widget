@@ -1,7 +1,12 @@
 import "dotenv/config";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { resolveHashtagId, fetchHashtagMedia, fetchAccountMedia } from "./instagram.js";
+import {
+  resolveHashtagId,
+  fetchHashtagMedia,
+  fetchAccountMedia,
+  fetchOwnMedia,
+} from "./instagram.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "..", "data");
 const HASHTAG_ID_FILE = path.join(DATA_DIR, "hashtag-id.json");
@@ -23,6 +28,11 @@ const ACCOUNTS = (process.env.IG_ACCOUNTS || "")
   .split(",")
   .map((name) => name.trim().replace(/^@/, ""))
   .filter(Boolean);
+
+// When the token belongs to the account we want to feature, its own media edge
+// returns playable video URLs that business_discovery withholds. Set this once
+// IG_ACCESS_TOKEN is issued for that account.
+const INCLUDE_SELF = /^(1|true|yes)$/i.test(process.env.IG_INCLUDE_SELF || "");
 
 // Optional cutoff (e.g. "2026-08-25"). Posts published before it are dropped
 // from the feed, including ones already accumulated. Bare dates are read as
@@ -76,14 +86,20 @@ export async function fetchFeed() {
   // not lose the whole run, so each is settled independently.
   const discovered = [];
   const accountErrors = [];
-  const results = await Promise.allSettled(
-    ACCOUNTS.map((name) =>
-      fetchAccountMedia(IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, name)
-    )
-  );
+  const sources = ACCOUNTS.map((name) => ({
+    label: `@${name}`,
+    run: () => fetchAccountMedia(IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, name),
+  }));
+  if (INCLUDE_SELF) {
+    sources.push({
+      label: "own account",
+      run: () => fetchOwnMedia(IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN),
+    });
+  }
+  const results = await Promise.allSettled(sources.map((source) => source.run()));
   results.forEach((result, i) => {
     if (result.status === "fulfilled") discovered.push(...result.value);
-    else accountErrors.push(`@${ACCOUNTS[i]}: ${result.reason.message}`);
+    else accountErrors.push(`${sources[i].label}: ${result.reason.message}`);
   });
 
   const previous = (await readJson(FEED_FILE, {}))?.posts ?? [];

@@ -39,6 +39,7 @@ jobs:
           HASHTAG: ${{ vars.HASHTAG || 'befestival2026' }}
           IG_ACCOUNTS: ${{ vars.IG_ACCOUNTS }}
           IG_SINCE: ${{ vars.IG_SINCE }}
+          IG_INCLUDE_SELF: ${{ vars.IG_INCLUDE_SELF }}
         run: npm run fetch
 
       - name: Commit updated feed
