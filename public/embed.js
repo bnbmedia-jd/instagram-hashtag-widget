@@ -79,6 +79,7 @@
 .ighw-lb-time{font-size:.8em;opacity:.65;margin:0;}
 .ighw-lb-caption{font-size:.9em;line-height:1.55;margin:0;white-space:pre-wrap;word-wrap:break-word;}
 .ighw-lb-stats{font-size:.82em;opacity:.7;margin:0;}
+.ighw-lb-open[hidden]{display:none;}
 .ighw-lb-open{display:inline-block;margin-top:auto;padding:10px 16px;border-radius:8px;
   background:#0095f6;color:#fff;text-decoration:none;font-size:.88em;font-weight:600;
   text-align:center;border:0;cursor:pointer;}
@@ -409,7 +410,11 @@
     if (typeof post.like_count === "number") stats.push(post.like_count + " likes");
     if (typeof post.comments_count === "number") stats.push(post.comments_count + " comments");
     lb.stats.textContent = stats.join(" \u00B7 ");
+    // Guest uploads have no Instagram page to send anyone to, so the hand-off
+    // button only appears for posts that actually came from Instagram.
+    const isInstagram = /(^|\.)instagram\.com\//.test(post.permalink || "");
     lb.open.href = post.permalink || "#";
+    lb.open.hidden = !isInstagram;
     lb.prev.disabled = i === 0;
     lb.next.disabled = i === lbPosts.length - 1;
   }
@@ -428,7 +433,7 @@
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
     showAt(i);
-    lb.open.focus();
+    (lb.open.hidden ? lb.overlay.querySelector(".ighw-lb-x") : lb.open).focus();
   }
 
   function closeLightbox() {
