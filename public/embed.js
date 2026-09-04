@@ -29,7 +29,8 @@
   const UPLOAD_VIDEO_PRESET = script.dataset.uploadVideoPreset || "befestival_video";
   const MAX_VIDEO_SECONDS = parseFloat(script.dataset.maxVideoSeconds || "15");
   const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // Cloudinary's free-plan ceiling
-  // Placeholder until the real policy exists; override with data-privacy-url.
+  // Point these at the real pages with data-terms-url / data-privacy-url.
+  const TERMS_URL = script.dataset.termsUrl || "#";
   const PRIVACY_URL = script.dataset.privacyUrl || "#";
   const UPLOADS_ON = Boolean(UPLOAD_CLOUD && UPLOAD_PRESET);
   // Cloudinary's public list endpoint needs no credentials, so uploads can be
@@ -664,24 +665,29 @@
       count.textContent = `${caption.value.length} / 300`;
     });
 
-    // Required consent. Placeholder wording — replace PRIVACY_TEXT/PRIVACY_URL
-    // when the real policy is ready.
+    // Required consent. Link targets come from data-terms-url / data-privacy-url.
     const consent = el("label", "ighw-form-consent");
     const agree = el("input");
     agree.type = "checkbox";
+
+    const link = (text, href) => {
+      const a = el("a", null, text);
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      return a;
+    };
+
     const consentText = el("span");
-    consentText.appendChild(
+    consentText.append(
+      document.createTextNode("I agree to the "),
+      link("Terms of Use", TERMS_URL),
+      document.createTextNode(" and acknowledge the "),
+      link("Privacy Policy", PRIVACY_URL),
       document.createTextNode(
-        "I confirm this is my own photo or video, that everyone shown is happy for it to " +
-          "be displayed publicly, and I agree to the "
+        ", including the collection, use, and display of the photo and comments I submit."
       )
     );
-    const policyLink = el("a", null, "privacy policy");
-    policyLink.href = PRIVACY_URL;
-    policyLink.target = "_blank";
-    policyLink.rel = "noopener noreferrer";
-    consentText.appendChild(policyLink);
-    consentText.appendChild(document.createTextNode(". [Placeholder wording — final text to follow.]"));
     consent.append(agree, consentText);
 
     const row = el("div", "ighw-form-row");

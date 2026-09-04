@@ -154,6 +154,8 @@ Options go on the script tag:
 | `data-card-width` | `240px` | Card width in row layout. |
 | `data-header` | `true` | Set `false` to hide the hashtag title and "updated" line. |
 | `data-lightbox` | `true` | Set `false` to link straight to Instagram instead of opening the in-page lightbox. |
+| `data-terms-url` | `#` | Target for the Terms of Use link in the upload consent. |
+| `data-privacy-url` | `#` | Target for the Privacy Policy link in the upload consent. |
 | `data-feed` | this repo's feed | Override the feed JSON URL. |
 
 ### Single row
