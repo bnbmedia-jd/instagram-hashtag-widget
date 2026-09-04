@@ -27,6 +27,15 @@
   const UPLOAD_PRESET = script.dataset.uploadPreset || "";
   const UPLOAD_TAG = script.dataset.uploadTag || "befestival2026";
   const UPLOADS_ON = Boolean(UPLOAD_CLOUD && UPLOAD_PRESET);
+  // Cloudinary's public list endpoint needs no credentials, so uploads can be
+  // read straight from the browser and appear without waiting for the poll.
+  // The scheduled feed still carries them too; ids dedupe the overlap.
+  const UPLOAD_LIST_URL = UPLOAD_CLOUD
+    ? `https://res.cloudinary.com/${UPLOAD_CLOUD}/image/list/${UPLOAD_TAG}.json`
+    : "";
+  // Blocked posts must be honoured here as well, or a removed image would come
+  // straight back for anyone loading the page.
+  const BLOCKED_URL = FEED_URL.replace(/feed\.json.*$/, "blocked.json");
   const MAX_EDGE = 1600;      // downscale before upload
   const JPEG_QUALITY = 0.82;
   const SHOW_HEADER = script.dataset.header !== "false";
@@ -213,13 +222,79 @@
     return link;
   }
 
+  async function fetchJson(url) {
+    const res = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(url + " -> " + res.status);
+    return res.json();
+  }
+
+  function uploadToPost(resource) {
+    const url =
+      `https://res.cloudinary.com/${UPLOAD_CLOUD}/image/upload/` +
+      `v${resource.version}/${resource.public_id}.${resource.format}`;
+    const meta = resource.context?.custom || {};
+    return {
+      id: `upload-${resource.public_id}`,
+      media_type: "IMAGE",
+      media_url: url,
+      permalink: url,
+      caption: meta.caption || "",
+      username: meta.name || "guest",
+      timestamp: resource.created_at,
+      source: "upload",
+    };
+  }
+
+  // Both extra sources are optional: a failure in either leaves the scheduled
+  // feed rendering exactly as before.
+  async function fetchLiveUploads() {
+    if (!UPLOAD_LIST_URL) return [];
+    try {
+      const data = await fetchJson(UPLOAD_LIST_URL);
+      return (data.resources || []).map(uploadToPost);
+    } catch (err) {
+      if (window.console) console.warn("[ig-hashtag-widget] uploads:", err.message);
+      return [];
+    }
+  }
+
+  async function fetchBlocked() {
+    try {
+      const data = await fetchJson(BLOCKED_URL);
+      return {
+        ids: new Set(data.ids || []),
+        codes: (data.shortcodes || []).filter(Boolean),
+      };
+    } catch {
+      return { ids: new Set(), codes: [] };
+    }
+  }
+
   async function load(root) {
     const grid = root.querySelector(".ighw-grid");
     try {
-      const res = await fetch(FEED_URL + "?t=" + Date.now(), { cache: "no-store" });
-      if (!res.ok) throw new Error("feed " + res.status);
-      const data = await res.json();
-      const posts = (data.posts || []).slice(0, LIMIT);
+      const [data, liveUploads, blocked] = await Promise.all([
+        fetchJson(FEED_URL),
+        fetchLiveUploads(),
+        fetchBlocked(),
+      ]);
+
+      // Feed first, live uploads second: a just-uploaded photo wins over the
+      // copy the poll has already stored, and identical ids collapse.
+      const byId = new Map();
+      for (const post of data.posts || []) byId.set(post.id, post);
+      for (const post of liveUploads) byId.set(post.id, { ...byId.get(post.id), ...post });
+
+      const posts = [...byId.values()]
+        .filter(
+          (post) =>
+            !blocked.ids.has(post.id) &&
+            !blocked.codes.some((code) => (post.permalink || "").includes(code))
+        )
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(0, LIMIT);
 
       if (SHOW_HEADER) {
         const t = root.querySelector(".ighw-title");

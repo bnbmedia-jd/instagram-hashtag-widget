@@ -67,6 +67,9 @@ jobs:
           mkdir -p site/data
           cp -r public/* site/
           cp data/feed.json site/data/feed.json
+          # Served so the widget can honour the blocklist for images it reads
+          # directly from Cloudinary rather than through the feed.
+          cp data/blocked.json site/data/blocked.json
 
       - uses: actions/upload-pages-artifact@v5
         with:
