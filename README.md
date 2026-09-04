@@ -327,33 +327,52 @@ Uploads publish automatically; remove an unwanted one by adding its id
 
 ## Staff moderation page
 
-`staff.html` is an unlinked page for moderating the wall during an event:
+`staff.html` is an unlisted page for moderating the wall during an event:
 
 ```
 https://bnbmedia-jd.github.io/instagram-hashtag-widget/staff.html
 ```
 
-It shows every item — Instagram posts and guest uploads, including ones already
-hidden — newest first, and refreshes every 30 seconds. Guest uploads are read
-straight from Cloudinary, so a photo can be moderated before the scheduled poll
-has folded it into the feed.
+It lists every item — Instagram posts and guest uploads, including ones already
+hidden — newest first, and re-reads both sources every 20 seconds without a
+reload. Uploads are read straight from Cloudinary, so a photo can be moderated
+before the scheduled poll has folded it into the feed.
 
-Hiding requires a GitHub fine-grained token with **Contents: Read and write**
-and **Actions: Read and write** on this repo. Paste it once; it is kept in that
-browser's `localStorage` and never leaves the device. Without a token the page
-is read-only.
+### One shared password, no per-person credentials
 
-Hiding an item appends its id to `data/blocked.json` via the GitHub API and then
-triggers the workflow, so it disappears from the public page in about 40
-seconds. Restoring removes it again. The file is re-read immediately before each
-write and guarded by its sha, so two people moderating at once cannot clobber
-each other.
+A static page cannot hold a secret: anything embedded in it is readable by
+anyone, and GitHub would revoke a credential committed in the clear. So the
+credential is shipped **encrypted** and the staff password decrypts it in the
+browser.
+
+```bash
+node scripts/make-staff-auth.mjs      # prompts for the credential and a password
+git add public/staff-auth.json && git commit -m "Add staff auth" && git push
+```
+
+That writes `public/staff-auth.json` holding only ciphertext (AES-GCM, key
+derived with PBKDF2-SHA256 at 600k iterations). Staff enter the password once;
+it is kept in that browser's `localStorage` and the decrypted credential lives
+in memory only, never in storage. **Lock** clears it.
+
+The credential needs **Contents: Read and write** and **Actions: Read and
+write** on this repo, nothing else.
+
+Be clear about what this protects. The encrypted blob is public, so a determined
+attacker can attempt passwords against it offline — the password is the entire
+barrier. Use a long passphrase, give the credential a short expiry, and revoke
+it after the event. This is appropriate for a weekend event, not for anything
+sensitive.
+
+### What hiding does
+
+Hiding appends the item's id to `data/blocked.json` through the GitHub API and
+dispatches the workflow, so it leaves the public page in about 40 seconds.
+Restoring removes it. The file is re-read and sha-guarded immediately before
+each write, so two people moderating at once cannot overwrite each other.
 
 Hiding does not delete anything from Cloudinary — the file stays at its URL and
 is simply no longer shown. Bulk-delete the folder after the event.
-
-The URL is unlisted rather than protected: anyone who has it can view the
-gallery, but only someone with a valid token can change what is shown.
 
 ## Removing a post from the feed
 

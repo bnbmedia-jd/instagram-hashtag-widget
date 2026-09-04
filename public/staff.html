@@ -15,21 +15,30 @@
   header { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
   h1 { font-size:1.05rem; margin:0; }
   .muted { color:var(--muted); font-size:.8rem; }
-  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
-  input[type=password] { flex:1 1 260px; min-width:200px; padding:9px 11px; border-radius:8px;
-    border:1px solid var(--line); background:transparent; color:inherit; font:inherit; font-size:.88rem; }
-  button { font:inherit; font-size:.85rem; padding:9px 14px; border-radius:8px; cursor:pointer;
+  .err { color:var(--danger); }
+  [hidden] { display:none !important; }
+
+  /* Password gate */
+  #gate { max-width:340px; margin:14vh auto 0; text-align:center; }
+  #gate p { font-size:.85rem; color:var(--muted); margin:0 0 18px; }
+  #gate input { width:100%; padding:12px; border-radius:8px; border:1px solid var(--line);
+    background:transparent; color:inherit; font:inherit; margin-bottom:10px; text-align:center; }
+  #gate button { width:100%; }
+  #gateMsg { font-size:.8rem; margin-top:12px; min-height:1.2em; }
+
+  button { font:inherit; font-size:.85rem; padding:10px 14px; border-radius:8px; cursor:pointer;
     border:1px solid var(--line); background:transparent; color:inherit; }
   button:disabled { opacity:.5; cursor:default; }
-  button.primary { border-color:#3a7bd5; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+
   .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
-          display:flex; flex-direction:column; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          overflow:hidden; display:flex; flex-direction:column; }
   .card.blocked { opacity:.45; }
   .media { position:relative; aspect-ratio:1/1; background:#000; }
   .media img, .media video { width:100%; height:100%; object-fit:cover; display:block; }
-  .tag { position:absolute; top:6px; left:6px; font-size:.65rem; padding:2px 6px; border-radius:4px;
-         background:rgba(0,0,0,.7); }
+  .tag { position:absolute; top:6px; left:6px; font-size:.65rem; padding:2px 6px;
+         border-radius:4px; background:rgba(0,0,0,.7); }
   .tag.blockedtag { right:6px; left:auto; background:var(--danger); }
   .body { padding:9px 10px; display:flex; flex-direction:column; gap:5px; flex:1; }
   .who { font-size:.78rem; font-weight:600; }
@@ -40,48 +49,46 @@
   .act.hide { border-color:var(--danger); color:var(--danger); }
   .act.show { border-color:var(--ok); color:var(--ok); }
   #status { font-size:.8rem; margin-bottom:12px; min-height:1.2em; }
-  .err { color:var(--danger); }
 </style>
 </head>
 <body>
-<header>
-  <h1>Wall moderation</h1>
-  <span class="muted" id="count"></span>
-</header>
 
-<div class="bar">
-  <input type="password" id="token" placeholder="GitHub token (stored on this device only)" />
-  <button id="save">Save token</button>
-  <button id="reload" class="primary">Reload</button>
+<!-- Password gate. The credential is shipped encrypted; this password is what
+     decrypts it, so nothing here works until it is entered correctly. -->
+<div id="gate">
+  <h1>Wall moderation</h1>
+  <p>Enter the staff password.</p>
+  <input type="password" id="pw" placeholder="Password" autocomplete="current-password" />
+  <button id="unlock">Unlock</button>
+  <div id="gateMsg" class="muted"></div>
 </div>
 
-<div id="status" class="muted">Loading…</div>
-<div class="grid" id="grid"></div>
+<div id="app" hidden>
+  <header>
+    <h1>Wall moderation</h1>
+    <span class="muted" id="count"></span>
+  </header>
+  <div class="bar">
+    <button id="reload">Reload</button>
+    <button id="lock">Lock</button>
+  </div>
+  <div id="status" class="muted"></div>
+  <div class="grid" id="grid"></div>
+</div>
 
 <script>
-const REPO   = "bnbmedia-jd/instagram-hashtag-widget";
-const SITE   = "https://bnbmedia-jd.github.io/instagram-hashtag-widget";
-const CLOUD  = "ap5u4jpl";
-const TAG    = "befestival2026";
-const KEY    = "ighw_staff_token";
+const REPO  = "bnbmedia-jd/instagram-hashtag-widget";
+const SITE  = "https://bnbmedia-jd.github.io/instagram-hashtag-widget";
+const CLOUD = "ap5u4jpl";
+const TAG   = "befestival2026";
+const PW_KEY = "ighw_staff_pw";
+// The gallery re-reads both sources on this interval; no reload needed.
+const REFRESH_MS = 20000;
 
 const $ = (id) => document.getElementById(id);
-const statusEl = $("status");
-
-function setStatus(msg, isErr) {
-  statusEl.textContent = msg;
-  statusEl.className = isErr ? "err" : "muted";
-}
-
-function token() { return (localStorage.getItem(KEY) || "").trim(); }
-
-$("save").onclick = () => {
-  localStorage.setItem(KEY, $("token").value.trim());
-  $("token").value = "";
-  setStatus("Token saved on this device.");
-  load();
-};
-$("reload").onclick = () => load();
+let CREDENTIAL = null;   // held in memory only, never written to storage
+let blocked = { ids: [], shortcodes: [] };
+let timer = null;
 
 const bust = (u) => u + (u.includes("?") ? "&" : "?") + "t=" + Date.now();
 async function getJson(url) {
@@ -89,16 +96,95 @@ async function getJson(url) {
   if (!r.ok) throw new Error(url.split("/").pop() + " " + r.status);
   return r.json();
 }
+function setStatus(msg, isErr) {
+  $("status").textContent = msg;
+  $("status").className = isErr ? "err" : "muted";
+}
+const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+// The blob is public; the password is the only thing protecting it, which is
+// why derivation is deliberately expensive.
+async function unlockWith(password) {
+  const a = await getJson("staff-auth.json");
+  const base = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]
+  );
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: bytes(a.salt), iterations: a.iterations, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
+  );
+  const plain = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: bytes(a.iv) }, key, bytes(a.ct)
+  );
+  return new TextDecoder().decode(plain);
+}
+
+async function attempt(password, quiet) {
+  // Web Crypto is only exposed over https or localhost; without it nothing here
+  // can work, and the failure would otherwise look like a wrong password.
+  if (!window.crypto || !crypto.subtle) {
+    $("gateMsg").textContent = "This page must be opened over https.";
+    $("gateMsg").className = "err";
+    return false;
+  }
+  if (!password) {
+    $("gateMsg").textContent = "Enter the password.";
+    $("gateMsg").className = "err";
+    return false;
+  }
+  $("unlock").disabled = true;
+  $("gateMsg").textContent = quiet ? "Unlocking…" : "Checking… (a few seconds)";
+  $("gateMsg").className = "muted";
+  try {
+    CREDENTIAL = await unlockWith(password);
+    localStorage.setItem(PW_KEY, password);
+    $("gateMsg").textContent = "";
+    $("gate").hidden = true;
+    $("app").hidden = false;
+    load();
+    if (!timer) timer = setInterval(load, REFRESH_MS);
+    return true;
+  } catch (e) {
+    CREDENTIAL = null;
+    // A bad password and a missing file fail differently; say which.
+    const missing = /staff-auth\.json \d+/.test(e.message);
+    $("gateMsg").textContent = missing
+      ? "No staff-auth.json published yet — run scripts/make-staff-auth.mjs."
+      : "Wrong password.";
+    $("gateMsg").className = "err";
+    // A saved password that no longer works must not silently retry forever.
+    if (quiet) localStorage.removeItem(PW_KEY);
+    return false;
+  } finally {
+    $("unlock").disabled = false;
+  }
+}
+
+$("unlock").onclick = () => attempt($("pw").value.trim(), false);
+$("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("unlock").click(); });
+$("reload").onclick = () => load();
+$("lock").onclick = () => {
+  localStorage.removeItem(PW_KEY);
+  CREDENTIAL = null;
+  clearInterval(timer); timer = null;
+  $("app").hidden = true;
+  $("gate").hidden = false;
+  $("pw").value = "";
+  $("gateMsg").textContent = "Locked.";
+  $("gateMsg").className = "muted";
+};
 
 function timeAgo(iso) {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000);
-  const u = [["d",86400],["h",3600],["m",60]];
-  for (const [n, per] of u) { const v = Math.floor(s / per); if (v >= 1) return v + n + " ago"; }
+  for (const [n, per] of [["d",86400],["h",3600],["m",60]]) {
+    const v = Math.floor(s / per);
+    if (v >= 1) return v + n + " ago";
+  }
   return "just now";
 }
 
-// Uploads are read straight from Cloudinary so brand-new ones are moderatable
-// before the poll has folded them into the feed.
+// Read uploads straight from Cloudinary so a photo is moderatable before the
+// scheduled poll has folded it into the feed.
 async function cloudinaryPosts() {
   const out = [];
   for (const type of ["image", "video"]) {
@@ -106,25 +192,29 @@ async function cloudinaryPosts() {
       const d = await getJson(`https://res.cloudinary.com/${CLOUD}/${type}/list/${TAG}.json`);
       for (const r of d.resources || []) {
         const base = `https://res.cloudinary.com/${CLOUD}/${type}/upload`;
+        const url = `${base}/v${r.version}/${r.public_id}.${r.format}`;
         out.push({
           id: `upload-${r.public_id}`,
           media_type: type === "video" ? "VIDEO" : "IMAGE",
-          media_url: `${base}/v${r.version}/${r.public_id}.${r.format}`,
+          media_url: url,
           thumbnail_url: type === "video"
             ? `${base}/so_0/v${r.version}/${r.public_id}.jpg` : undefined,
-          permalink: `${base}/v${r.version}/${r.public_id}.${r.format}`,
+          permalink: url,
           caption: r.context?.custom?.caption || "",
           username: r.context?.custom?.name || "guest",
           timestamp: r.created_at,
           source: "upload",
         });
       }
-    } catch (e) { /* a type with no uploads yet 404s */ }
+    } catch (e) { /* a type with nothing in it yet 404s */ }
   }
   return out;
 }
 
-let blocked = { ids: [], shortcodes: [] };
+function isBlocked(p) {
+  return blocked.ids.includes(p.id) ||
+    blocked.shortcodes.some((c) => c && (p.permalink || "").includes(c));
+}
 
 async function load() {
   setStatus("Loading…");
@@ -140,20 +230,17 @@ async function load() {
     for (const p of feed.posts || []) byId.set(p.id, p);
     for (const p of uploads) byId.set(p.id, { ...byId.get(p.id), ...p });
 
-    const posts = [...byId.values()]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const posts = [...byId.values()].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+    );
     render(posts);
-    const hidden = posts.filter(isBlocked).length;
-    $("count").textContent = `${posts.length} items · ${hidden} hidden`;
-    setStatus(token() ? "Ready." : "No token saved — you can view, but not hide anything.");
+    $("count").textContent =
+      `${posts.length} items · ${posts.filter(isBlocked).length} hidden`;
+    const clock = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setStatus(`Updated ${clock} · refreshing every ${REFRESH_MS / 1000}s`);
   } catch (e) {
     setStatus("Load failed: " + e.message, true);
   }
-}
-
-function isBlocked(p) {
-  return blocked.ids.includes(p.id) ||
-         blocked.shortcodes.some((c) => c && (p.permalink || "").includes(c));
 }
 
 function render(posts) {
@@ -169,10 +256,13 @@ function render(posts) {
     const still = p.thumbnail_url || p.media_url;
     if (p.media_type === "VIDEO" && p.media_url && p.source === "upload") {
       const v = document.createElement("video");
-      v.src = p.media_url; v.poster = still || ""; v.muted = true; v.controls = true;
-      v.preload = "metadata"; media.appendChild(v);
+      v.src = p.media_url; v.poster = still || ""; v.muted = true;
+      v.controls = true; v.preload = "metadata";
+      media.appendChild(v);
     } else if (still) {
-      const i = document.createElement("img"); i.src = still; i.loading = "lazy"; media.appendChild(i);
+      const i = document.createElement("img");
+      i.src = still; i.loading = "lazy"; i.alt = "";
+      media.appendChild(i);
     }
     const tag = document.createElement("span");
     tag.className = "tag";
@@ -180,7 +270,8 @@ function render(posts) {
     media.appendChild(tag);
     if (hidden) {
       const b = document.createElement("span");
-      b.className = "tag blockedtag"; b.textContent = "hidden";
+      b.className = "tag blockedtag";
+      b.textContent = "hidden";
       media.appendChild(b);
     }
     card.appendChild(media);
@@ -188,15 +279,17 @@ function render(posts) {
     const body = document.createElement("div");
     body.className = "body";
     const who = document.createElement("div");
-    who.className = "who"; who.textContent = "@" + (p.username || "unknown");
+    who.className = "who";
+    who.textContent = "@" + (p.username || "unknown");
     const cap = document.createElement("div");
-    cap.className = "cap"; cap.textContent = p.caption || "";
+    cap.className = "cap";
+    cap.textContent = p.caption || "";
     const when = document.createElement("div");
-    when.className = "when"; when.textContent = timeAgo(p.timestamp);
+    when.className = "when";
+    when.textContent = timeAgo(p.timestamp);
     const btn = document.createElement("button");
     btn.className = "act " + (hidden ? "show" : "hide");
     btn.textContent = hidden ? "Restore" : "Hide";
-    btn.disabled = !token();
     btn.onclick = () => toggle(p, hidden, btn);
     body.append(who, cap, when, btn);
     card.appendChild(body);
@@ -204,23 +297,22 @@ function render(posts) {
   }
 }
 
-// GitHub's contents API needs base64; btoa alone breaks on non-ASCII captions.
+// GitHub's contents API needs base64, and btoa alone breaks on non-ASCII text.
 function b64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = ""; bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  const b = new TextEncoder().encode(str);
+  let bin = "";
+  b.forEach((x) => (bin += String.fromCharCode(x)));
   return btoa(bin);
 }
 function unb64(s) {
-  const bin = atob(s.replace(/\n/g, ""));
-  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(bytes(s.replace(/\n/g, "")));
 }
 
 async function gh(path, opts = {}) {
   const r = await fetch("https://api.github.com/repos/" + REPO + path, {
     ...opts,
     headers: {
-      Authorization: "Bearer " + token(),
+      Authorization: "Bearer " + CREDENTIAL,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       ...(opts.headers || {}),
@@ -237,10 +329,10 @@ async function toggle(post, currentlyHidden, btn) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = currentlyHidden ? "Restoring…" : "Hiding…";
-  setStatus("Updating blocklist…");
+  setStatus("Updating…");
   try {
-    // Re-read immediately before writing: several staff may be moderating at
-    // once, and the sha guards against clobbering each other's changes.
+    // Re-read right before writing: several people may be moderating at once,
+    // and the sha makes GitHub reject a stale write rather than lose one.
     const file = await gh("/contents/data/blocked.json");
     const data = JSON.parse(unb64(file.content));
     data.ids = data.ids || [];
@@ -248,7 +340,9 @@ async function toggle(post, currentlyHidden, btn) {
 
     if (currentlyHidden) {
       data.ids = data.ids.filter((i) => i !== post.id);
-      data.shortcodes = data.shortcodes.filter((c) => !(post.permalink || "").includes(c));
+      data.shortcodes = data.shortcodes.filter(
+        (c) => !(post.permalink || "").includes(c)
+      );
     } else if (!data.ids.includes(post.id)) {
       data.ids.push(post.id);
     }
@@ -262,14 +356,13 @@ async function toggle(post, currentlyHidden, btn) {
       }),
     });
 
-    // Republish so the change reaches the public page promptly.
     await gh("/actions/workflows/update-feed.yml/dispatches", {
       method: "POST",
       body: JSON.stringify({ ref: "main" }),
     });
 
-    setStatus((currentlyHidden ? "Restored. " : "Hidden. ") + "Live in ~40 seconds.");
     blocked = { ids: data.ids, shortcodes: data.shortcodes };
+    setStatus((currentlyHidden ? "Restored. " : "Hidden. ") + "Live in ~40 seconds.");
     setTimeout(load, 1500);
   } catch (e) {
     setStatus("Failed: " + e.message, true);
@@ -278,9 +371,8 @@ async function toggle(post, currentlyHidden, btn) {
   }
 }
 
-if (token()) $("token").placeholder = "Token saved — paste a new one to replace";
-load();
-setInterval(load, 30000);
+const saved = localStorage.getItem(PW_KEY);
+if (saved) attempt(saved, true);
 </script>
 </body>
 </html>
