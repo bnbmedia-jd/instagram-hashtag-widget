@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Widget preview</title>
+  <style>
+    /* Dark, to match the page this will actually live on. */
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 1000px; margin: 0 auto; padding: 2rem 1.25rem;
+           background: #101012; color: #ececec; }
+    h1 { font-size: 1.2rem; margin: 0 0 .25rem; }
+    p.sub { color: #8b8b90; font-size: .85rem; margin: 0 0 2rem; }
+    section { margin-bottom: 3rem; }
+    h2 { font-size: .95rem; text-transform: uppercase; letter-spacing: .05em;
+         color: #8b8b90; border-bottom: 1px solid #2a2a2e; padding-bottom: .4rem; }
+  </style>
+</head>
+<body>
+  <h1>Widget preview</h1>
+  <p class="sub">Both layouts, with guest uploads enabled — exactly as they render on your site.</p>
+
+  <section>
+    <h2>Gallery</h2>
+    <div id="ig-hashtag-feed"></div>
+    <script src="embed.js"
+            data-upload-cloud="ap5u4jpl"
+            data-upload-preset="befestival_guest"></script>
+  </section>
+
+  <section>
+    <h2>Single row</h2>
+    <div id="ig-feed-row"></div>
+    <script src="embed.js"
+            data-target="ig-feed-row"
+            data-layout="row"
+            data-header="false"></script>
+  </section>
+</body>
+</html>

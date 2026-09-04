@@ -325,6 +325,36 @@ Photos are downscaled in the browser to 1600px JPEG before upload, which keeps a
 Uploads publish automatically; remove an unwanted one by adding its id
 (`upload-<public_id>`) to `data/blocked.json`, exactly like an Instagram post.
 
+## Staff moderation page
+
+`staff.html` is an unlinked page for moderating the wall during an event:
+
+```
+https://bnbmedia-jd.github.io/instagram-hashtag-widget/staff.html
+```
+
+It shows every item — Instagram posts and guest uploads, including ones already
+hidden — newest first, and refreshes every 30 seconds. Guest uploads are read
+straight from Cloudinary, so a photo can be moderated before the scheduled poll
+has folded it into the feed.
+
+Hiding requires a GitHub fine-grained token with **Contents: Read and write**
+and **Actions: Read and write** on this repo. Paste it once; it is kept in that
+browser's `localStorage` and never leaves the device. Without a token the page
+is read-only.
+
+Hiding an item appends its id to `data/blocked.json` via the GitHub API and then
+triggers the workflow, so it disappears from the public page in about 40
+seconds. Restoring removes it again. The file is re-read immediately before each
+write and guarded by its sha, so two people moderating at once cannot clobber
+each other.
+
+Hiding does not delete anything from Cloudinary — the file stays at its URL and
+is simply no longer shown. Bulk-delete the folder after the event.
+
+The URL is unlisted rather than protected: anyone who has it can view the
+gallery, but only someone with a valid token can change what is shown.
+
 ## Removing a post from the feed
 
 The feed accumulates and never drops posts on its own, so deleting a post on

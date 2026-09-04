@@ -64,7 +64,7 @@
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
 /* Outlined rather than filled, for dark backgrounds. Override --ighw-add-fg on
    .ighw if the host page is light. Full width on phones, intrinsic on desktop. */
-.ighw-add{display:block;width:100%;padding:14px 30px;margin:0 auto var(--ighw-gap);
+.ighw-add{display:block;width:100%;padding:14px 30px;margin:0 auto var(--ighw-add-mb,30px);
   font:inherit;font-size:1.02em;font-weight:600;
   color:var(--ighw-add-fg,#fff);background:transparent;
   border:1.5px solid var(--ighw-add-fg,#fff);
@@ -73,7 +73,7 @@
 .ighw-add:hover{background-color:rgba(255,255,255,.12);}
 @media (min-width:600px){.ighw-add{width:auto;}}
 .ighw-add:disabled{opacity:.6;cursor:default;}
-.ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-6px 0 var(--ighw-gap);text-align:center;}
+.ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-22px 0 var(--ighw-add-mb,30px);text-align:center;}
 .ighw-form{position:fixed;inset:0;z-index:99998;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.72);padding:4vh 5vw;}
 .ighw-form[hidden]{display:none;}

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Wall moderation</title>
+<style>
+  :root { --bg:#0f0f11; --fg:#ececec; --muted:#8b8b90; --line:#2a2a2e; --card:#17171a;
+          --danger:#e5484d; --ok:#30a46c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); padding:16px;
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  h1 { font-size:1.05rem; margin:0; }
+  .muted { color:var(--muted); font-size:.8rem; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  input[type=password] { flex:1 1 260px; min-width:200px; padding:9px 11px; border-radius:8px;
+    border:1px solid var(--line); background:transparent; color:inherit; font:inherit; font-size:.88rem; }
+  button { font:inherit; font-size:.85rem; padding:9px 14px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--line); background:transparent; color:inherit; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.primary { border-color:#3a7bd5; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+          display:flex; flex-direction:column; }
+  .card.blocked { opacity:.45; }
+  .media { position:relative; aspect-ratio:1/1; background:#000; }
+  .media img, .media video { width:100%; height:100%; object-fit:cover; display:block; }
+  .tag { position:absolute; top:6px; left:6px; font-size:.65rem; padding:2px 6px; border-radius:4px;
+         background:rgba(0,0,0,.7); }
+  .tag.blockedtag { right:6px; left:auto; background:var(--danger); }
+  .body { padding:9px 10px; display:flex; flex-direction:column; gap:5px; flex:1; }
+  .who { font-size:.78rem; font-weight:600; }
+  .cap { font-size:.72rem; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
+         -webkit-box-orient:vertical; overflow:hidden; }
+  .when { font-size:.68rem; color:var(--muted); }
+  .act { width:100%; margin-top:auto; }
+  .act.hide { border-color:var(--danger); color:var(--danger); }
+  .act.show { border-color:var(--ok); color:var(--ok); }
+  #status { font-size:.8rem; margin-bottom:12px; min-height:1.2em; }
+  .err { color:var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wall moderation</h1>
+  <span class="muted" id="count"></span>
+</header>
+
+<div class="bar">
+  <input type="password" id="token" placeholder="GitHub token (stored on this device only)" />
+  <button id="save">Save token</button>
+  <button id="reload" class="primary">Reload</button>
+</div>
+
+<div id="status" class="muted">Loading…</div>
+<div class="grid" id="grid"></div>
+
+<script>
+const REPO   = "bnbmedia-jd/instagram-hashtag-widget";
+const SITE   = "https://bnbmedia-jd.github.io/instagram-hashtag-widget";
+const CLOUD  = "ap5u4jpl";
+const TAG    = "befestival2026";
+const KEY    = "ighw_staff_token";
+
+const $ = (id) => document.getElementById(id);
+const statusEl = $("status");
+
+function setStatus(msg, isErr) {
+  statusEl.textContent = msg;
+  statusEl.className = isErr ? "err" : "muted";
+}
+
+function token() { return (localStorage.getItem(KEY) || "").trim(); }
+
+$("save").onclick = () => {
+  localStorage.setItem(KEY, $("token").value.trim());
+  $("token").value = "";
+  setStatus("Token saved on this device.");
+  load();
+};
+$("reload").onclick = () => load();
+
+const bust = (u) => u + (u.includes("?") ? "&" : "?") + "t=" + Date.now();
+async function getJson(url) {
+  const r = await fetch(bust(url), { cache: "no-store" });
+  if (!r.ok) throw new Error(url.split("/").pop() + " " + r.status);
+  return r.json();
+}
+
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+  const u = [["d",86400],["h",3600],["m",60]];
+  for (const [n, per] of u) { const v = Math.floor(s / per); if (v >= 1) return v + n + " ago"; }
+  return "just now";
+}
+
+// Uploads are read straight from Cloudinary so brand-new ones are moderatable
+// before the poll has folded them into the feed.
+async function cloudinaryPosts() {
+  const out = [];
+  for (const type of ["image", "video"]) {
+    try {
+      const d = await getJson(`https://res.cloudinary.com/${CLOUD}/${type}/list/${TAG}.json`);
+      for (const r of d.resources || []) {
+        const base = `https://res.cloudinary.com/${CLOUD}/${type}/upload`;
+        out.push({
+          id: `upload-${r.public_id}`,
+          media_type: type === "video" ? "VIDEO" : "IMAGE",
+          media_url: `${base}/v${r.version}/${r.public_id}.${r.format}`,
+          thumbnail_url: type === "video"
+            ? `${base}/so_0/v${r.version}/${r.public_id}.jpg` : undefined,
+          permalink: `${base}/v${r.version}/${r.public_id}.${r.format}`,
+          caption: r.context?.custom?.caption || "",
+          username: r.context?.custom?.name || "guest",
+          timestamp: r.created_at,
+          source: "upload",
+        });
+      }
+    } catch (e) { /* a type with no uploads yet 404s */ }
+  }
+  return out;
+}
+
+let blocked = { ids: [], shortcodes: [] };
+
+async function load() {
+  setStatus("Loading…");
+  try {
+    const [feed, uploads, blk] = await Promise.all([
+      getJson(SITE + "/data/feed.json"),
+      cloudinaryPosts(),
+      getJson(SITE + "/data/blocked.json").catch(() => ({ ids: [], shortcodes: [] })),
+    ]);
+    blocked = { ids: blk.ids || [], shortcodes: blk.shortcodes || [] };
+
+    const byId = new Map();
+    for (const p of feed.posts || []) byId.set(p.id, p);
+    for (const p of uploads) byId.set(p.id, { ...byId.get(p.id), ...p });
+
+    const posts = [...byId.values()]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    render(posts);
+    const hidden = posts.filter(isBlocked).length;
+    $("count").textContent = `${posts.length} items · ${hidden} hidden`;
+    setStatus(token() ? "Ready." : "No token saved — you can view, but not hide anything.");
+  } catch (e) {
+    setStatus("Load failed: " + e.message, true);
+  }
+}
+
+function isBlocked(p) {
+  return blocked.ids.includes(p.id) ||
+         blocked.shortcodes.some((c) => c && (p.permalink || "").includes(c));
+}
+
+function render(posts) {
+  const grid = $("grid");
+  grid.textContent = "";
+  for (const p of posts) {
+    const hidden = isBlocked(p);
+    const card = document.createElement("div");
+    card.className = "card" + (hidden ? " blocked" : "");
+
+    const media = document.createElement("div");
+    media.className = "media";
+    const still = p.thumbnail_url || p.media_url;
+    if (p.media_type === "VIDEO" && p.media_url && p.source === "upload") {
+      const v = document.createElement("video");
+      v.src = p.media_url; v.poster = still || ""; v.muted = true; v.controls = true;
+      v.preload = "metadata"; media.appendChild(v);
+    } else if (still) {
+      const i = document.createElement("img"); i.src = still; i.loading = "lazy"; media.appendChild(i);
+    }
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = p.source === "upload" ? "guest" : "instagram";
+    media.appendChild(tag);
+    if (hidden) {
+      const b = document.createElement("span");
+      b.className = "tag blockedtag"; b.textContent = "hidden";
+      media.appendChild(b);
+    }
+    card.appendChild(media);
+
+    const body = document.createElement("div");
+    body.className = "body";
+    const who = document.createElement("div");
+    who.className = "who"; who.textContent = "@" + (p.username || "unknown");
+    const cap = document.createElement("div");
+    cap.className = "cap"; cap.textContent = p.caption || "";
+    const when = document.createElement("div");
+    when.className = "when"; when.textContent = timeAgo(p.timestamp);
+    const btn = document.createElement("button");
+    btn.className = "act " + (hidden ? "show" : "hide");
+    btn.textContent = hidden ? "Restore" : "Hide";
+    btn.disabled = !token();
+    btn.onclick = () => toggle(p, hidden, btn);
+    body.append(who, cap, when, btn);
+    card.appendChild(body);
+    grid.appendChild(card);
+  }
+}
+
+// GitHub's contents API needs base64; btoa alone breaks on non-ASCII captions.
+function b64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = ""; bytes.forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin);
+}
+function unb64(s) {
+  const bin = atob(s.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function gh(path, opts = {}) {
+  const r = await fetch("https://api.github.com/repos/" + REPO + path, {
+    ...opts,
+    headers: {
+      Authorization: "Bearer " + token(),
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(opts.headers || {}),
+    },
+  });
+  if (!r.ok) {
+    const b = await r.json().catch(() => ({}));
+    throw new Error(r.status + " " + (b.message || r.statusText));
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+async function toggle(post, currentlyHidden, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = currentlyHidden ? "Restoring…" : "Hiding…";
+  setStatus("Updating blocklist…");
+  try {
+    // Re-read immediately before writing: several staff may be moderating at
+    // once, and the sha guards against clobbering each other's changes.
+    const file = await gh("/contents/data/blocked.json");
+    const data = JSON.parse(unb64(file.content));
+    data.ids = data.ids || [];
+    data.shortcodes = data.shortcodes || [];
+
+    if (currentlyHidden) {
+      data.ids = data.ids.filter((i) => i !== post.id);
+      data.shortcodes = data.shortcodes.filter((c) => !(post.permalink || "").includes(c));
+    } else if (!data.ids.includes(post.id)) {
+      data.ids.push(post.id);
+    }
+
+    await gh("/contents/data/blocked.json", {
+      method: "PUT",
+      body: JSON.stringify({
+        message: (currentlyHidden ? "Restore " : "Hide ") + post.id + " (staff page)",
+        content: b64(JSON.stringify(data, null, 2) + "\n"),
+        sha: file.sha,
+      }),
+    });
+
+    // Republish so the change reaches the public page promptly.
+    await gh("/actions/workflows/update-feed.yml/dispatches", {
+      method: "POST",
+      body: JSON.stringify({ ref: "main" }),
+    });
+
+    setStatus((currentlyHidden ? "Restored. " : "Hidden. ") + "Live in ~40 seconds.");
+    blocked = { ids: data.ids, shortcodes: data.shortcodes };
+    setTimeout(load, 1500);
+  } catch (e) {
+    setStatus("Failed: " + e.message, true);
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+if (token()) $("token").placeholder = "Token saved — paste a new one to replace";
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
