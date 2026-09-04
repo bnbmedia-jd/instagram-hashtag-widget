@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.bnbmedia.igwidget.refresh</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- Replace with the absolute path to auto-refresh.sh on this machine -->
+    <string>/Users/CHANGEME/instagram-hashtag-widget/scripts/auto-refresh.sh</string>
+  </array>
+
+  <!-- Every 2 minutes. -->
+  <key>StartInterval</key>
+  <integer>120</integer>
+
+  <!-- Fire once at load so you get immediate confirmation it works. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/igwidget-refresh.err</string>
+</dict>
+</plist>

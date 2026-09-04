@@ -216,6 +216,45 @@ won't inherit your page's styling:
         style="width:100%;height:800px;border:0"></iframe>
 ```
 
+## Keeping the feed fresh (GitHub cron is unreliable)
+
+GitHub deprioritises frequent `schedule` triggers on free public repos. In
+practice this workflow's 5-minute cron fired roughly every 3-5 hours, so posts
+and uploads can sit invisible for a long time.
+
+The fix is to trigger the workflow from a machine that is actually always on.
+`scripts/auto-refresh.sh` does that over the REST API, and
+`scripts/com.bnbmedia.igwidget.refresh.plist` runs it every two minutes via
+launchd.
+
+Setup on the always-on Mac:
+
+```bash
+# 1. Fine-grained token: github.com/settings/tokens
+#    Repository access: this repo only. Permissions: Actions = Read and write.
+mkdir -p ~/.config/ig-widget
+printf '%s' 'github_pat_...' > ~/.config/ig-widget/token
+chmod 600 ~/.config/ig-widget/token
+
+# 2. Get the scripts
+git clone https://github.com/bnbmedia-jd/instagram-hashtag-widget.git
+cd instagram-hashtag-widget
+
+# 3. Verify it works before automating it
+./scripts/auto-refresh.sh && tail -1 ~/.config/ig-widget/refresh.log
+
+# 4. Install the timer (edit the path inside the plist first)
+cp scripts/com.bnbmedia.igwidget.refresh.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.bnbmedia.igwidget.refresh.plist
+```
+
+Check it is running: `tail -f ~/.config/ig-widget/refresh.log` — one `ok` line
+every two minutes. To stop: `launchctl unload
+~/Library/LaunchAgents/com.bnbmedia.igwidget.refresh.plist`.
+
+The token file is read at run time and never committed. Delete the token when
+the event is over.
+
 ## Making a post appear immediately
 
 The scheduled poll runs every 5 minutes, but GitHub delays scheduled workflows
