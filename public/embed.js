@@ -85,6 +85,7 @@
   position:fixed;inset:0;z-index:99998;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.78);padding:4vh 5vw;}
 .ighw-form[hidden]{display:none;}
+.ighw-form,.ighw-form *{box-sizing:border-box;}
 .ighw-form-card{background:var(--f-bg);color:var(--f-fg);border:1px solid var(--f-line);
   border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:92vh;
   overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.55);}
@@ -101,10 +102,11 @@
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Needs to out-specify the generic label rule below, which sets display:block
    and would otherwise stack the box above the text. */
-.ighw-form label.ighw-form-consent{display:flex;gap:9px;align-items:flex-start;
-  margin:2px 0 14px;font-size:.78em;font-weight:400;line-height:1.45;color:var(--f-fg);
+.ighw-form label.ighw-form-consent{display:flex;gap:8px;align-items:flex-start;
+  margin:2px 0 16px;font-size:.7em;font-weight:400;line-height:1.5;color:var(--f-muted);
   cursor:pointer;}
-.ighw-form label.ighw-form-consent input[type="checkbox"]{width:17px;height:17px;
+.ighw-form label.ighw-form-consent a{color:var(--f-muted);text-decoration:underline;}
+.ighw-form label.ighw-form-consent input[type="checkbox"]{width:15px;height:15px;
   margin:1px 0 0;padding:0;flex:0 0 auto;accent-color:var(--f-accent);cursor:pointer;}
 .ighw-form label.ighw-form-consent span{flex:1 1 auto;min-width:0;}
 .ighw-form-consent a{color:inherit;}
@@ -125,6 +127,12 @@
 .ighw-form-row button:disabled{opacity:.45;cursor:default;}
 .ighw-form-row button[hidden]{display:none;}
 .ighw-form-err{color:#ff6b6b;font-size:.82em;margin:10px 0 0;}
+@media (max-width:600px){
+  .ighw-form{padding:3vh 14px;}
+  .ighw-form-card{padding:16px;border-radius:10px;}
+  .ighw-form-prev{height:150px;}
+  .ighw-form input,.ighw-form textarea{font-size:16px;}
+}
 .ighw-lb{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.82);padding:4vh 4vw;}
 .ighw-lb[hidden]{display:none;}
