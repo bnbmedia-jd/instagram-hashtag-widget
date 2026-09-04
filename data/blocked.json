@@ -1,8 +1,6 @@
 {
   "_note": "Posts to keep out of the feed permanently. Filtering happens after every fetch, so blocked posts stay out even though the API keeps returning them. Match by media id, or by the shortcode in a permalink (the part after /p/ or /reel/). Remove an entry here to let a post back in.",
-  "ids": [
-    "18627943273063054"
-  ],
+  "ids": [],
   "shortcodes": [
     "Dc2umwTsTru"
   ]
