@@ -325,36 +325,53 @@ async function gh(path, opts = {}) {
   return r.status === 204 ? null : r.json();
 }
 
+// One read-modify-write attempt. Returns the new blocklist, or throws.
+async function writeBlocklist(post, currentlyHidden) {
+  // The contents API sits behind a cache that can hand back a stale sha, so the
+  // read is cache-busted; a stale sha is exactly what produces a 409 below.
+  const file = await gh("/contents/data/blocked.json?ref=main&cb=" + Date.now());
+  const data = JSON.parse(unb64(file.content));
+  data.ids = data.ids || [];
+  data.shortcodes = data.shortcodes || [];
+
+  if (currentlyHidden) {
+    data.ids = data.ids.filter((i) => i !== post.id);
+    data.shortcodes = data.shortcodes.filter((c) => !(post.permalink || "").includes(c));
+  } else if (!data.ids.includes(post.id)) {
+    data.ids.push(post.id);
+  }
+
+  await gh("/contents/data/blocked.json", {
+    method: "PUT",
+    body: JSON.stringify({
+      message: (currentlyHidden ? "Restore " : "Hide ") + post.id + " (staff page)",
+      content: b64(JSON.stringify(data, null, 2) + "\n"),
+      sha: file.sha,
+    }),
+  });
+  return data;
+}
+
 async function toggle(post, currentlyHidden, btn) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = currentlyHidden ? "Restoring…" : "Hiding…";
   setStatus("Updating…");
   try {
-    // Re-read right before writing: several people may be moderating at once,
-    // and the sha makes GitHub reject a stale write rather than lose one.
-    const file = await gh("/contents/data/blocked.json");
-    const data = JSON.parse(unb64(file.content));
-    data.ids = data.ids || [];
-    data.shortcodes = data.shortcodes || [];
-
-    if (currentlyHidden) {
-      data.ids = data.ids.filter((i) => i !== post.id);
-      data.shortcodes = data.shortcodes.filter(
-        (c) => !(post.permalink || "").includes(c)
-      );
-    } else if (!data.ids.includes(post.id)) {
-      data.ids.push(post.id);
+    let data = null;
+    // A 409 means the file moved under us — someone else moderating, or a stale
+    // cached read. Either way the fix is to re-read and reapply, not to fail.
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        data = await writeBlocklist(post, currentlyHidden);
+        break;
+      } catch (e) {
+        const conflict = /^409/.test(e.message);
+        if (!conflict || attempt === 4) throw e;
+        setStatus(`Retrying (${attempt}/3)…`);
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
     }
-
-    await gh("/contents/data/blocked.json", {
-      method: "PUT",
-      body: JSON.stringify({
-        message: (currentlyHidden ? "Restore " : "Hide ") + post.id + " (staff page)",
-        content: b64(JSON.stringify(data, null, 2) + "\n"),
-        sha: file.sha,
-      }),
-    });
 
     await gh("/actions/workflows/update-feed.yml/dispatches", {
       method: "POST",
