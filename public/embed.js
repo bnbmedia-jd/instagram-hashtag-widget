@@ -170,6 +170,17 @@
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 .ighw-meta{font-size:.75em;color:var(--ighw-muted);margin:0;}
 .ighw-empty{color:var(--ighw-muted);font-size:.9em;padding:1.5em 0;text-align:center;grid-column:1/-1;}
+/* A 220px minimum leaves a single column on a phone. Three across shows far
+   more of the wall at once; the card chrome shrinks to suit the narrower tile.
+   Scoped to the grid layout so the row carousel keeps its own sizing. */
+@media (max-width:600px){
+  .ighw-grid:not(.ighw-row){gap:6px;grid-template-columns:repeat(3,minmax(0,1fr));}
+  .ighw-grid:not(.ighw-row) .ighw-body{padding:6px 7px 7px;}
+  .ighw-grid:not(.ighw-row) .ighw-cap{font-size:.68em;line-height:1.35;
+    -webkit-line-clamp:2;margin-bottom:3px;}
+  .ighw-grid:not(.ighw-row) .ighw-meta{font-size:.62em;}
+  .ighw-grid:not(.ighw-row) .ighw-badge{font-size:.58em;padding:1px 4px;top:4px;right:4px;}
+}
 
 /* Single-row carousel. Native scroll with snap points, so touch and trackpad
    work without JS; the arrows exist for mouse users on desktop. */
