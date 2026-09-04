@@ -694,7 +694,7 @@
     const capLabel = el("label", null, "Description (optional)");
     const caption = el("textarea");
     caption.maxLength = 300;
-    caption.placeholder = "Add a caption";
+    caption.placeholder = "Add your caption!";
     const count = el("p", "ighw-form-count", "0 / 300");
     caption.addEventListener("input", () => {
       count.textContent = `${caption.value.length} / 300`;
