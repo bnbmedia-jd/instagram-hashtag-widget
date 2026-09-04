@@ -308,6 +308,14 @@ Admin API credentials used to *read* uploads stay in Actions secrets:
 Without those three secrets the upload source is simply skipped, so the feed
 keeps working.
 
+Videos are accepted too, capped at 15 seconds. Length is checked in the browser
+before anything uploads, so an over-long clip is rejected immediately rather
+than after a slow upload. Browsers cannot reliably transcode video, so the file
+is sent as-is and Cloudinary shrinks it on arrival — the `befestival_video`
+preset applies `c_limit,w_720,q_auto,vc_auto`, so what gets stored and served is
+small even though the upload is full size. Override the limit with
+`data-max-video-seconds`.
+
 Guests are asked for an optional name and description before the photo is sent;
 both are stored as Cloudinary context metadata and render on the card and in the
 lightbox.

@@ -26,13 +26,15 @@
   const UPLOAD_CLOUD = script.dataset.uploadCloud || "";
   const UPLOAD_PRESET = script.dataset.uploadPreset || "";
   const UPLOAD_TAG = script.dataset.uploadTag || "befestival2026";
+  const UPLOAD_VIDEO_PRESET = script.dataset.uploadVideoPreset || "befestival_video";
+  const MAX_VIDEO_SECONDS = parseFloat(script.dataset.maxVideoSeconds || "15");
+  const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // Cloudinary's free-plan ceiling
   const UPLOADS_ON = Boolean(UPLOAD_CLOUD && UPLOAD_PRESET);
   // Cloudinary's public list endpoint needs no credentials, so uploads can be
   // read straight from the browser and appear without waiting for the poll.
   // The scheduled feed still carries them too; ids dedupe the overlap.
-  const UPLOAD_LIST_URL = UPLOAD_CLOUD
-    ? `https://res.cloudinary.com/${UPLOAD_CLOUD}/image/list/${UPLOAD_TAG}.json`
-    : "";
+  const listUrl = (type) =>
+    `https://res.cloudinary.com/${UPLOAD_CLOUD}/${type}/list/${UPLOAD_TAG}.json`;
   // Blocked posts must be honoured here as well, or a removed image would come
   // straight back for anyone loading the page.
   const BLOCKED_URL = FEED_URL.replace(/feed\.json.*$/, "blocked.json");
@@ -75,6 +77,7 @@
 .ighw-form-title{margin:0 0 14px;font-size:1.05em;font-weight:600;}
 .ighw-form-prev{width:100%;height:170px;object-fit:cover;border-radius:8px;
   background:var(--ighw-border);display:block;margin-bottom:14px;}
+.ighw-form-prev[hidden]{display:none;}
 .ighw-form label{display:block;font-size:.82em;font-weight:600;margin:0 0 4px;}
 .ighw-form input,.ighw-form textarea{width:100%;font:inherit;font-size:.92em;padding:9px 10px;
   border:1px solid var(--ighw-border);border-radius:8px;background:transparent;color:inherit;
@@ -252,15 +255,17 @@
     return res.json();
   }
 
-  function uploadToPost(resource) {
-    const url =
-      `https://res.cloudinary.com/${UPLOAD_CLOUD}/image/upload/` +
-      `v${resource.version}/${resource.public_id}.${resource.format}`;
+  function uploadToPost(resource, type) {
+    const base = `https://res.cloudinary.com/${UPLOAD_CLOUD}/${type}/upload`;
+    const url = `${base}/v${resource.version}/${resource.public_id}.${resource.format}`;
     const meta = resource.context?.custom || {};
     return {
       id: `upload-${resource.public_id}`,
-      media_type: "IMAGE",
+      media_type: type === "video" ? "VIDEO" : "IMAGE",
       media_url: url,
+      // Cloudinary renders a still from the first frame on request.
+      thumbnail_url:
+        type === "video" ? `${base}/so_0/v${resource.version}/${resource.public_id}.jpg` : undefined,
       permalink: url,
       caption: meta.caption || "",
       username: meta.name || "guest",
@@ -272,14 +277,15 @@
   // Both extra sources are optional: a failure in either leaves the scheduled
   // feed rendering exactly as before.
   async function fetchLiveUploads() {
-    if (!UPLOAD_LIST_URL) return [];
-    try {
-      const data = await fetchJson(UPLOAD_LIST_URL);
-      return (data.resources || []).map(uploadToPost);
-    } catch (err) {
-      if (window.console) console.warn("[ig-hashtag-widget] uploads:", err.message);
-      return [];
-    }
+    if (!UPLOAD_CLOUD) return [];
+    // A type with no uploads yet 404s, so each is settled on its own.
+    const results = await Promise.allSettled(
+      ["image", "video"].map(async (type) => {
+        const data = await fetchJson(listUrl(type));
+        return (data.resources || []).map((r) => uploadToPost(r, type));
+      })
+    );
+    return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
   }
 
   async function fetchBlocked() {
@@ -501,7 +507,7 @@
   // Phone photos are many megabytes; downscaling in the browser keeps uploads
   // quick on venue wifi and well inside a free storage tier.
   async function shrink(file) {
-    if (!/^image\//.test(file.type)) throw new Error("That file is not an image.");
+    if (!/^image\//.test(file.type)) throw new Error("That file is not an image or video.");
     let bitmap;
     try {
       bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -525,10 +531,61 @@
     return String(value).replace(/[|=]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
   }
 
+  // Duration is only readable once the browser has the metadata, so this is
+  // checked before anything is sent rather than rejected server-side.
+  function videoDuration(file) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      const url = URL.createObjectURL(file);
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        // Some containers (notably MediaRecorder WebM) report Infinity or NaN
+        // until the browser has seen the end; seeking far past it forces a real
+        // value. Without this, the comparison silently passes.
+        if (Number.isFinite(video.duration)) {
+          URL.revokeObjectURL(url);
+          resolve(video.duration);
+          return;
+        }
+        video.ontimeupdate = () => {
+          video.ontimeupdate = null;
+          URL.revokeObjectURL(url);
+          resolve(Number.isFinite(video.duration) ? video.duration : NaN);
+        };
+        video.currentTime = 1e101;
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("That video could not be read."));
+      };
+      video.src = url;
+    });
+  }
+
+  async function checkVideo(file) {
+    if (file.size > MAX_VIDEO_BYTES) {
+      throw new Error("That video is too large (100MB maximum).");
+    }
+    const seconds = await videoDuration(file);
+    // An unreadable duration must not pass the check by default.
+    if (!Number.isFinite(seconds)) {
+      throw new Error("That video's length could not be read — please try a different file.");
+    }
+    if (seconds > MAX_VIDEO_SECONDS + 0.5) {
+      throw new Error(
+        `Videos must be ${MAX_VIDEO_SECONDS} seconds or less — that one is ${Math.round(seconds)}s. ` +
+          `Please trim it and try again.`
+      );
+    }
+  }
+
   async function uploadPhoto(file, name, caption) {
+    const isVideo = /^video\//.test(file.type);
+    if (isVideo) await checkVideo(file);
+
     const body = new FormData();
-    body.append("file", await shrink(file));
-    body.append("upload_preset", UPLOAD_PRESET);
+    body.append("file", isVideo ? file : await shrink(file));
+    body.append("upload_preset", isVideo ? UPLOAD_VIDEO_PRESET : UPLOAD_PRESET);
     body.append("tags", UPLOAD_TAG);
 
     const pairs = [];
@@ -536,10 +593,8 @@
     if (caption) pairs.push(`caption=${contextSafe(caption, 300)}`);
     if (pairs.length) body.append("context", pairs.join("|"));
 
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${UPLOAD_CLOUD}/image/upload`, {
-      method: "POST",
-      body,
-    });
+    const endpoint = `https://api.cloudinary.com/v1_1/${UPLOAD_CLOUD}/${isVideo ? "video" : "image"}/upload`;
+    const res = await fetch(endpoint, { method: "POST", body });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error?.message || "Upload failed");
     return data;
@@ -557,6 +612,12 @@
     const title = el("p", "ighw-form-title", "Add your photo");
     const preview = el("img", "ighw-form-prev");
     preview.alt = "";
+    const previewVideo = el("video", "ighw-form-prev");
+    previewVideo.muted = true;
+    previewVideo.loop = true;
+    previewVideo.playsInline = true;
+    previewVideo.controls = true;
+    previewVideo.hidden = true;
 
     const nameLabel = el("label", null, "Your name (optional)");
     const name = el("input");
@@ -580,14 +641,14 @@
     row.append(cancel, submit);
 
     const error = el("p", "ighw-form-err", "");
-    card.append(title, preview, nameLabel, name, capLabel, caption, count, row, error);
+    card.append(title, preview, previewVideo, nameLabel, name, capLabel, caption, count, row, error);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
 
     cancel.addEventListener("click", closeUploadForm);
     overlay.addEventListener("click", (e) => { if (e.target === overlay) closeUploadForm(); });
 
-    form = { overlay, preview, name, caption, count, submit, cancel, error };
+    form = { overlay, preview, previewVideo, name, caption, count, submit, cancel, error };
     return form;
   }
 
@@ -595,7 +656,10 @@
     if (!form) return;
     form.overlay.hidden = true;
     document.body.style.overflow = "";
-    if (form.preview.src.startsWith("blob:")) URL.revokeObjectURL(form.preview.src);
+    for (const node of [form.preview, form.previewVideo]) {
+      if (node.src && node.src.startsWith("blob:")) URL.revokeObjectURL(node.src);
+    }
+    form.previewVideo.pause();
     document.removeEventListener("keydown", onFormKey);
   }
 
@@ -605,7 +669,12 @@
 
   function openUploadForm(file, button, note) {
     if (!form) buildUploadForm();
-    form.preview.src = URL.createObjectURL(file);
+    const isVideo = /^video\//.test(file.type);
+    const objectUrl = URL.createObjectURL(file);
+    form.preview.hidden = isVideo;
+    form.previewVideo.hidden = !isVideo;
+    (isVideo ? form.previewVideo : form.preview).src = objectUrl;
+    form.overlay.dataset.kind = isVideo ? "video" : "photo";
     form.name.value = "";
     form.caption.value = "";
     form.count.textContent = "0 / 300";
@@ -642,13 +711,13 @@
   }
 
   function buildUploader(root) {
-    const button = el("button", "ighw-add", "\uD83D\uDCF7  Add your photo");
+    const button = el("button", "ighw-add", "\uD83D\uDCF7  Add your photo or video");
     button.type = "button";
     const note = el("p", "ighw-add-note", "");
 
     const input = el("input");
     input.type = "file";
-    input.accept = "image/*";
+    input.accept = "image/*,video/*";
     input.hidden = true;
 
     button.addEventListener("click", () => input.click());
