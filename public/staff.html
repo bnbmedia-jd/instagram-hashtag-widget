@@ -32,6 +32,18 @@
   .bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
 
   .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); }
+  /* A 210px minimum leaves only one column on a phone; force two so more of the
+     wall is scannable at a glance, and tighten the chrome to suit. */
+  @media (max-width:620px) {
+    body { padding:12px; }
+    .grid { gap:8px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .body { padding:7px 8px; gap:4px; }
+    .who { font-size:.72rem; }
+    .cap { font-size:.68rem; -webkit-line-clamp:2; }
+    .when { font-size:.64rem; }
+    .act { padding:8px 6px; font-size:.78rem; }
+    .tag { font-size:.6rem; padding:1px 5px; }
+  }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
           overflow:hidden; display:flex; flex-direction:column; }
   .card.blocked { opacity:.45; }
