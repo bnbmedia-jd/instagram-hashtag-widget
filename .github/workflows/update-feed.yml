@@ -29,9 +29,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
 
-      - run: npm ci
+      # No install step: the fetch uses only Node built-ins, and the env vars
+      # below stand in for dotenv. Installing dependencies here cost over four
+      # minutes per run for no benefit.
 
       - name: Fetch hashtag feed
         env:

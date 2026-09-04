@@ -1,4 +1,11 @@
-import "dotenv/config";
+// Local runs read credentials from .env; CI supplies them as environment
+// variables, so dotenv is optional and its absence lets CI skip npm install
+// entirely. Must resolve before the process.env reads below.
+try {
+  await import("dotenv/config");
+} catch {
+  // no .env loader available — the environment is expected to be pre-populated
+}
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import {
