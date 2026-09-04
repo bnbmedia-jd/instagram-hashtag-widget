@@ -99,10 +99,14 @@
 .ighw-form-pick:hover{filter:brightness(1.08);}
 .ighw-form-file{font-size:.76em;color:var(--f-muted);margin:0 0 14px;text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ighw-form-consent{display:flex;gap:9px;align-items:flex-start;margin:2px 0 14px;
-  font-size:.78em;line-height:1.45;color:var(--f-fg);}
-.ighw-form-consent input{width:16px;height:16px;margin:2px 0 0;flex:0 0 auto;
-  accent-color:var(--f-accent);}
+/* Needs to out-specify the generic label rule below, which sets display:block
+   and would otherwise stack the box above the text. */
+.ighw-form label.ighw-form-consent{display:flex;gap:9px;align-items:flex-start;
+  margin:2px 0 14px;font-size:.78em;font-weight:400;line-height:1.45;color:var(--f-fg);
+  cursor:pointer;}
+.ighw-form label.ighw-form-consent input[type="checkbox"]{width:17px;height:17px;
+  margin:1px 0 0;padding:0;flex:0 0 auto;accent-color:var(--f-accent);cursor:pointer;}
+.ighw-form label.ighw-form-consent span{flex:1 1 auto;min-width:0;}
 .ighw-form-consent a{color:inherit;}
 .ighw-form label{display:block;font-size:.82em;font-weight:600;margin:0 0 4px;}
 .ighw-form input,.ighw-form textarea{width:100%;font:inherit;font-size:.92em;padding:9px 10px;
