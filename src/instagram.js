@@ -1,7 +1,10 @@
 const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
 
+// `username` is NOT supported on hashtag media edges — Instagram withholds the
+// posting account. Requesting it fails with (#100), but only once the hashtag
+// actually returns results, so it stays invisible until the tag has posts.
 const MEDIA_FIELDS =
-  "id,caption,media_type,media_url,permalink,timestamp,username,like_count,comments_count";
+  "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count";
 
 // business_discovery exposes media per-account rather than per-hashtag, so
 // username comes from the account node instead of the media object.

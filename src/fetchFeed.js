@@ -84,10 +84,17 @@ export async function fetchFeed() {
 
   const hashtagId = await getCachedHashtagId(HASHTAG);
 
-  const [recent, top] = await Promise.all([
+  // Settled, not all: a hashtag-side failure must not discard the account
+  // posts fetched below, which are the bulk of the feed.
+  const hashtagErrors = [];
+  const [recentResult, topResult] = await Promise.allSettled([
     fetchHashtagMedia(hashtagId, IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, "recent_media"),
     fetchHashtagMedia(hashtagId, IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN, "top_media"),
   ]);
+  const recent = recentResult.status === "fulfilled" ? recentResult.value : [];
+  const top = topResult.status === "fulfilled" ? topResult.value : [];
+  if (recentResult.status === "rejected") hashtagErrors.push(`recent_media: ${recentResult.reason.message}`);
+  if (topResult.status === "rejected") hashtagErrors.push(`top_media: ${topResult.reason.message}`);
 
   // One bad account (renamed, switched to personal, missing permission) must
   // not lose the whole run, so each is settled independently.
@@ -150,7 +157,7 @@ export async function fetchFeed() {
     added,
     fromApi: new Set([...top, ...recent].map((p) => p.id)).size,
     fromAccounts: new Set(discovered.map((p) => p.id)).size,
-    accountErrors,
+    accountErrors: [...accountErrors, ...hashtagErrors],
     changed,
     excluded,
   };
