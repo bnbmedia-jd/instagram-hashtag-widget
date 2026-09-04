@@ -29,6 +29,8 @@
   const UPLOAD_VIDEO_PRESET = script.dataset.uploadVideoPreset || "befestival_video";
   const MAX_VIDEO_SECONDS = parseFloat(script.dataset.maxVideoSeconds || "15");
   const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // Cloudinary's free-plan ceiling
+  // Placeholder until the real policy exists; override with data-privacy-url.
+  const PRIVACY_URL = script.dataset.privacyUrl || "#";
   const UPLOADS_ON = Boolean(UPLOAD_CLOUD && UPLOAD_PRESET);
   // Cloudinary's public list endpoint needs no credentials, so uploads can be
   // read straight from the browser and appear without waiting for the poll.
@@ -84,6 +86,16 @@
 .ighw-form-prev{width:100%;height:170px;object-fit:cover;border-radius:8px;
   background:var(--ighw-border);display:block;margin-bottom:14px;}
 .ighw-form-prev[hidden]{display:none;}
+.ighw-form-pick{width:100%;font:inherit;font-size:.92em;font-weight:600;padding:13px;
+  margin-bottom:6px;border-radius:8px;cursor:pointer;border:1.5px dashed var(--ighw-border);
+  background:transparent;color:inherit;}
+.ighw-form-pick:hover{border-style:solid;}
+.ighw-form-file{font-size:.76em;opacity:.7;margin:0 0 14px;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ighw-form-consent{display:flex;gap:9px;align-items:flex-start;margin:2px 0 14px;
+  font-size:.78em;line-height:1.45;}
+.ighw-form-consent input{width:16px;height:16px;margin:2px 0 0;flex:0 0 auto;}
+.ighw-form-consent a{color:inherit;}
 .ighw-form label{display:block;font-size:.82em;font-weight:600;margin:0 0 4px;}
 .ighw-form input,.ighw-form textarea{width:100%;font:inherit;font-size:.92em;padding:9px 10px;
   border:1px solid var(--ighw-border);border-radius:8px;background:transparent;color:inherit;
@@ -615,9 +627,21 @@
     overlay.setAttribute("aria-modal", "true");
 
     const card = el("div", "ighw-form-card");
-    const title = el("p", "ighw-form-title", "Add your photo");
+    const title = el("p", "ighw-form-title", "Add your photo or video");
+
+    // The file picker lives inside the modal so everything is entered in one
+    // place rather than the browser dialog appearing first.
+    const pick = el("button", "ighw-form-pick", "Choose a photo or video");
+    pick.type = "button";
+    const fileInput = el("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*,video/*";
+    fileInput.hidden = true;
+    const fileName = el("p", "ighw-form-file", "No file chosen yet");
+
     const preview = el("img", "ighw-form-prev");
     preview.alt = "";
+    preview.hidden = true;
     const previewVideo = el("video", "ighw-form-prev");
     previewVideo.muted = true;
     previewVideo.loop = true;
@@ -640,6 +664,26 @@
       count.textContent = `${caption.value.length} / 300`;
     });
 
+    // Required consent. Placeholder wording — replace PRIVACY_TEXT/PRIVACY_URL
+    // when the real policy is ready.
+    const consent = el("label", "ighw-form-consent");
+    const agree = el("input");
+    agree.type = "checkbox";
+    const consentText = el("span");
+    consentText.appendChild(
+      document.createTextNode(
+        "I confirm this is my own photo or video, that everyone shown is happy for it to " +
+          "be displayed publicly, and I agree to the "
+      )
+    );
+    const policyLink = el("a", null, "privacy policy");
+    policyLink.href = PRIVACY_URL;
+    policyLink.target = "_blank";
+    policyLink.rel = "noopener noreferrer";
+    consentText.appendChild(policyLink);
+    consentText.appendChild(document.createTextNode(". [Placeholder wording — final text to follow.]"));
+    consent.append(agree, consentText);
+
     const row = el("div", "ighw-form-row");
     const cancel = el("button", null, "Cancel");
     const submit = el("button", "ighw-form-submit", "Add to the wall");
@@ -647,15 +691,57 @@
     row.append(cancel, submit);
 
     const error = el("p", "ighw-form-err", "");
-    card.append(title, preview, previewVideo, nameLabel, name, capLabel, caption, count, row, error);
+    card.append(
+      title, pick, fileInput, fileName, preview, previewVideo,
+      nameLabel, name, capLabel, caption, count, consent, row, error
+    );
     overlay.appendChild(card);
     document.body.appendChild(overlay);
 
     cancel.addEventListener("click", closeUploadForm);
     overlay.addEventListener("click", (e) => { if (e.target === overlay) closeUploadForm(); });
+    pick.addEventListener("click", () => fileInput.click());
+    agree.addEventListener("change", refreshSubmitState);
 
-    form = { overlay, preview, previewVideo, name, caption, count, submit, cancel, error };
+    fileInput.addEventListener("change", () => {
+      const chosen = fileInput.files && fileInput.files[0];
+      if (!chosen) return;
+      setChosenFile(chosen);
+    });
+
+    form = {
+      overlay, pick, fileInput, fileName, preview, previewVideo,
+      name, caption, count, agree, submit, cancel, error, file: null,
+    };
     return form;
+  }
+
+  // Submitting needs both a file and consent; the button says which is missing.
+  function refreshSubmitState() {
+    if (!form) return;
+    const ready = Boolean(form.file) && form.agree.checked;
+    form.submit.disabled = !ready;
+    form.submit.textContent = !form.file
+      ? "Choose a file first"
+      : !form.agree.checked
+        ? "Tick the box to continue"
+        : "Add to the wall";
+  }
+
+  function setChosenFile(file) {
+    const isVideo = /^video\//.test(file.type);
+    for (const node of [form.preview, form.previewVideo]) {
+      if (node.src && node.src.startsWith("blob:")) URL.revokeObjectURL(node.src);
+    }
+    form.file = file;
+    const objectUrl = URL.createObjectURL(file);
+    form.preview.hidden = isVideo;
+    form.previewVideo.hidden = !isVideo;
+    (isVideo ? form.previewVideo : form.preview).src = objectUrl;
+    form.fileName.textContent = file.name || (isVideo ? "Video selected" : "Photo selected");
+    form.pick.textContent = "Choose a different file";
+    form.error.textContent = "";
+    refreshSubmitState();
   }
 
   function closeUploadForm() {
@@ -666,6 +752,8 @@
       if (node.src && node.src.startsWith("blob:")) URL.revokeObjectURL(node.src);
     }
     form.previewVideo.pause();
+    form.file = null;
+    form.fileInput.value = "";
     document.removeEventListener("keydown", onFormKey);
   }
 
@@ -673,32 +761,33 @@
     if (e.key === "Escape") closeUploadForm();
   }
 
-  function openUploadForm(file, button, note) {
+  function openUploadForm(button, note) {
     if (!form) buildUploadForm();
-    const isVideo = /^video\//.test(file.type);
-    const objectUrl = URL.createObjectURL(file);
-    form.preview.hidden = isVideo;
-    form.previewVideo.hidden = !isVideo;
-    (isVideo ? form.previewVideo : form.preview).src = objectUrl;
-    form.overlay.dataset.kind = isVideo ? "video" : "photo";
+    form.file = null;
+    form.fileInput.value = "";
+    form.fileName.textContent = "No file chosen yet";
+    form.pick.textContent = "Choose a photo or video";
+    form.preview.hidden = true;
+    form.previewVideo.hidden = true;
     form.name.value = "";
     form.caption.value = "";
     form.count.textContent = "0 / 300";
+    form.agree.checked = false;
     form.error.textContent = "";
-    form.submit.disabled = false;
-    form.submit.textContent = "Add to the wall";
+    form.cancel.disabled = false;
+    refreshSubmitState();
     form.overlay.hidden = false;
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onFormKey);
-    setTimeout(() => form.name.focus(), 30);
 
     form.submit.onclick = async () => {
+      if (!form.file || !form.agree.checked) return;
       form.submit.disabled = true;
       form.cancel.disabled = true;
       form.submit.textContent = "Uploading\u2026";
       form.error.textContent = "";
       try {
-        await uploadPhoto(file, form.name.value.trim(), form.caption.value.trim());
+        await uploadPhoto(form.file, form.name.value.trim(), form.caption.value.trim());
         closeUploadForm();
         button.textContent = "\u2713  Thanks! Your photo is on its way";
         note.textContent = "It appears on the wall within a minute.";
@@ -708,10 +797,8 @@
         }, 6000);
       } catch (err) {
         form.error.textContent = err.message || "Upload failed \u2014 please try again.";
-        form.submit.textContent = "Add to the wall";
-      } finally {
-        form.submit.disabled = false;
         form.cancel.disabled = false;
+        refreshSubmitState();
       }
     };
   }
@@ -720,21 +807,8 @@
     const button = el("button", "ighw-add", "\uD83D\uDCF7  Add your photo or video");
     button.type = "button";
     const note = el("p", "ighw-add-note", "");
-
-    const input = el("input");
-    input.type = "file";
-    input.accept = "image/*,video/*";
-    input.hidden = true;
-
-    button.addEventListener("click", () => input.click());
-
-    input.addEventListener("change", () => {
-      const file = input.files && input.files[0];
-      input.value = "";
-      if (file) openUploadForm(file, button, note);
-    });
-
-    root.append(button, note, input);
+    button.addEventListener("click", () => openUploadForm(button, note));
+    root.append(button, note);
   }
 
   function init() {
