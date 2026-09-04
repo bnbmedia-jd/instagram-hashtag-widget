@@ -21,6 +21,14 @@
   const LAYOUT = script.dataset.layout === "row" ? "row" : "grid";
   const CARD_WIDTH = script.dataset.cardWidth || "240px";
   const LIGHTBOX = script.dataset.lightbox !== "false";
+  // Guest uploads. Both values are public by design — an unsigned preset is
+  // what lets the browser upload with no backend and no secret on the page.
+  const UPLOAD_CLOUD = script.dataset.uploadCloud || "";
+  const UPLOAD_PRESET = script.dataset.uploadPreset || "";
+  const UPLOAD_TAG = script.dataset.uploadTag || "befestival2026";
+  const UPLOADS_ON = Boolean(UPLOAD_CLOUD && UPLOAD_PRESET);
+  const MAX_EDGE = 1600;      // downscale before upload
+  const JPEG_QUALITY = 0.82;
   const SHOW_HEADER = script.dataset.header !== "false";
   // Short by default: the feed is a small static JSON on a CDN, and a stale
   // open tab is the biggest source of perceived lag after posting.
@@ -43,6 +51,12 @@
 .ighw-post:hover{transform:translateY(-2px);}
 .ighw-media{position:relative;aspect-ratio:1/1;background:var(--ighw-border);}
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
+.ighw-add{display:block;width:100%;padding:16px;margin:0 0 var(--ighw-gap);
+  font:inherit;font-size:1.02em;font-weight:600;color:#fff;background:#0095f6;
+  border:0;border-radius:var(--ighw-radius);cursor:pointer;text-align:center;}
+.ighw-add:hover{filter:brightness(1.06);}
+.ighw-add:disabled{opacity:.6;cursor:default;}
+.ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-6px 0 var(--ighw-gap);text-align:center;}
 .ighw-lb{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.82);padding:4vh 4vw;}
 .ighw-lb[hidden]{display:none;}
@@ -383,6 +397,82 @@
     return rail;
   }
 
+  // Phone photos are many megabytes; downscaling in the browser keeps uploads
+  // quick on venue wifi and well inside a free storage tier.
+  async function shrink(file) {
+    if (!/^image\//.test(file.type)) throw new Error("That file is not an image.");
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    } catch {
+      return file; // unsupported codec (HEIC on some browsers) — send as-is
+    }
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1_000_000) return file;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", JPEG_QUALITY));
+    return blob || file;
+  }
+
+  async function uploadPhoto(file, name) {
+    const body = new FormData();
+    body.append("file", await shrink(file));
+    body.append("upload_preset", UPLOAD_PRESET);
+    body.append("tags", UPLOAD_TAG);
+    if (name) body.append("context", `name=${name.replace(/[|=]/g, " ").slice(0, 60)}`);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${UPLOAD_CLOUD}/image/upload`, {
+      method: "POST",
+      body,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || "Upload failed");
+    return data;
+  }
+
+  function buildUploader(root) {
+    const button = el("button", "ighw-add", "\uD83D\uDCF7  Add your photo");
+    button.type = "button";
+    const note = el("p", "ighw-add-note", "");
+
+    const input = el("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.hidden = true;
+
+    button.addEventListener("click", () => input.click());
+
+    input.addEventListener("change", async () => {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+
+      const name = (window.prompt("Your name? (optional)") || "").trim();
+      button.disabled = true;
+      button.textContent = "Uploading\u2026";
+      note.textContent = "";
+      try {
+        await uploadPhoto(file, name);
+        button.textContent = "\u2713  Thanks! Your photo is on its way";
+        note.textContent = "It appears on the wall within a few minutes.";
+      } catch (err) {
+        button.textContent = "\uD83D\uDCF7  Add your photo";
+        note.textContent = err.message || "Upload failed — please try again.";
+      } finally {
+        setTimeout(() => {
+          button.disabled = false;
+          button.textContent = "\uD83D\uDCF7  Add your photo";
+        }, 4000);
+      }
+    });
+
+    root.append(button, note, input);
+  }
+
   function init() {
     injectStyles();
 
@@ -395,6 +485,7 @@
     }
 
     const root = el("div", "ighw");
+    if (UPLOADS_ON) buildUploader(root);
     if (SHOW_HEADER) {
       const head = el("div", "ighw-head");
       head.appendChild(el("h2", "ighw-title", ""));

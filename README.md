@@ -239,6 +239,41 @@ minimum 15) if you want a different cadence:
         data-refresh="30" defer></script>
 ```
 
+## Guest photo uploads
+
+Attendees can add photos directly, without Instagram. The browser uploads to
+Cloudinary using an *unsigned upload preset* — no backend, and no secret on the
+page — and the scheduled poll pulls those images into the same `feed.json`
+alongside Instagram posts.
+
+Enable it by adding two attributes to the embed:
+
+```html
+<div id="ig-hashtag-feed"></div>
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js"
+        data-upload-cloud="YOUR_CLOUD_NAME"
+        data-upload-preset="YOUR_UNSIGNED_PRESET"
+        defer></script>
+```
+
+Both values are public by design; that is what an unsigned preset is for. The
+Admin API credentials used to *read* uploads stay in Actions secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `CLOUDINARY_CLOUD_NAME` | account identifier |
+| `CLOUDINARY_API_KEY` | Admin API access |
+| `CLOUDINARY_API_SECRET` | Admin API access |
+| `CLOUDINARY_TAG` (variable) | tag to collect, defaults to `befestival2026` |
+
+Without those three secrets the upload source is simply skipped, so the feed
+keeps working.
+
+Photos are downscaled in the browser to 1600px JPEG before upload, which keeps a
+3MB phone photo around 300KB — faster on venue wifi and far inside a free tier.
+Uploads publish automatically; remove an unwanted one by adding its id
+(`upload-<public_id>`) to `data/blocked.json`, exactly like an Instagram post.
+
 ## Removing a post from the feed
 
 The feed accumulates and never drops posts on its own, so deleting a post on

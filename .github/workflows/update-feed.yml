@@ -42,6 +42,10 @@ jobs:
           IG_ACCOUNTS: ${{ vars.IG_ACCOUNTS }}
           IG_SINCE: ${{ vars.IG_SINCE }}
           IG_INCLUDE_SELF: ${{ vars.IG_INCLUDE_SELF }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          CLOUDINARY_TAG: ${{ vars.CLOUDINARY_TAG }}
         run: npm run fetch
 
       - name: Commit updated feed

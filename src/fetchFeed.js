@@ -14,6 +14,7 @@ import {
   fetchAccountMedia,
   fetchOwnMedia,
 } from "./instagram.js";
+import { fetchUploads } from "./cloudinary.js";
 
 const DATA_DIR = path.join(import.meta.dirname, "..", "data");
 const HASHTAG_ID_FILE = path.join(DATA_DIR, "hashtag-id.json");
@@ -41,6 +42,17 @@ const ACCOUNTS = (process.env.IG_ACCOUNTS || "")
 // returns playable video URLs that business_discovery withholds. Set this once
 // IG_ACCESS_TOKEN is issued for that account.
 const INCLUDE_SELF = /^(1|true|yes)$/i.test(process.env.IG_INCLUDE_SELF || "");
+
+// Guest photo uploads. Absent credentials simply disable the source.
+const CLOUDINARY = {
+  cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+  apiKey: process.env.CLOUDINARY_API_KEY || "",
+  apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+  tag: process.env.CLOUDINARY_TAG || "befestival2026",
+};
+const UPLOADS_ENABLED = Boolean(
+  CLOUDINARY.cloudName && CLOUDINARY.apiKey && CLOUDINARY.apiSecret
+);
 
 // Optional cutoff (e.g. "2026-08-25"). Posts published before it are dropped
 // from the feed, including ones already accumulated. Bare dates are read as
@@ -111,6 +123,9 @@ export async function fetchFeed() {
       run: () => fetchOwnMedia(IG_BUSINESS_ACCOUNT_ID, IG_ACCESS_TOKEN),
     });
   }
+  if (UPLOADS_ENABLED) {
+    sources.push({ label: "guest uploads", run: () => fetchUploads(CLOUDINARY) });
+  }
   const results = await Promise.allSettled(sources.map((source) => source.run()));
   results.forEach((result, i) => {
     if (result.status === "fulfilled") discovered.push(...result.value);
@@ -169,7 +184,8 @@ export async function fetchFeed() {
     posts,
     added,
     fromApi: new Set([...top, ...recent].map((p) => p.id)).size,
-    fromAccounts: new Set(discovered.map((p) => p.id)).size,
+    fromAccounts: new Set(discovered.filter((p) => p.source !== "upload").map((p) => p.id)).size,
+    fromUploads: new Set(discovered.filter((p) => p.source === "upload").map((p) => p.id)).size,
     accountErrors: [...accountErrors, ...hashtagErrors],
     changed,
     excluded,
@@ -179,10 +195,10 @@ export async function fetchFeed() {
 // Allow `npm run fetch` to run this directly, once, outside the server.
 if (import.meta.url === `file://${process.argv[1]}`) {
   fetchFeed()
-    .then(({ posts, added, fromApi, fromAccounts, accountErrors, excluded }) => {
+    .then(({ posts, added, fromApi, fromAccounts, fromUploads, accountErrors, excluded }) => {
       console.log(
         `#${HASHTAG}: ${fromApi} via hashtag, ${fromAccounts} via accounts, ` +
-          `${added} new, ${posts.length} total in feed` +
+          `${fromUploads} via uploads, ${added} new, ${posts.length} total in feed` +
           (excluded ? ` (${excluded} before cutoff excluded)` : "")
       );
       for (const err of accountErrors) console.warn(`  account fetch failed — ${err}`);
