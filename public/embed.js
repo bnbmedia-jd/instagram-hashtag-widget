@@ -67,7 +67,7 @@
 .ighw-media img,.ighw-media video{width:100%;height:100%;object-fit:cover;display:block;}
 /* Outlined rather than filled, for dark backgrounds. Override --ighw-add-fg on
    .ighw if the host page is light. Full width on phones, intrinsic on desktop. */
-.ighw-add{display:block;width:100%;padding:14px 30px;margin:0 auto var(--ighw-add-mb,30px);
+.ighw-add{display:block;width:100%;padding:14px 30px;margin:0 0 var(--ighw-add-mb,30px);
   font:inherit;font-size:1.02em;font-weight:600;
   color:var(--ighw-add-fg,#fff);background:transparent;
   border:1.5px solid var(--ighw-add-fg,#fff);
@@ -77,6 +77,7 @@
 @media (min-width:600px){.ighw-add{width:auto;}}
 .ighw-add:disabled{opacity:.6;cursor:default;}
 .ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-22px 0 var(--ighw-add-mb,30px);text-align:center;}
+.ighw-add-note:empty{display:none;}
 /* The modal is appended to <body>, outside .ighw, so it carries its own tokens
    rather than inheriting the widget's. Dark regardless of host page or system
    setting, since it sits over a dark site. */
