@@ -66,6 +66,27 @@
 .ighw-add:hover{filter:brightness(1.06);}
 .ighw-add:disabled{opacity:.6;cursor:default;}
 .ighw-add-note{font-size:.8em;color:var(--ighw-muted);margin:-6px 0 var(--ighw-gap);text-align:center;}
+.ighw-form{position:fixed;inset:0;z-index:99998;display:flex;align-items:center;
+  justify-content:center;background:rgba(0,0,0,.72);padding:4vh 5vw;}
+.ighw-form[hidden]{display:none;}
+.ighw-form-card{background:#fff;color:#111;border-radius:12px;padding:20px;width:100%;
+  max-width:420px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+@media (prefers-color-scheme:dark){.ighw-form-card{background:#1c1c1c;color:#eee;}}
+.ighw-form-title{margin:0 0 14px;font-size:1.05em;font-weight:600;}
+.ighw-form-prev{width:100%;height:170px;object-fit:cover;border-radius:8px;
+  background:var(--ighw-border);display:block;margin-bottom:14px;}
+.ighw-form label{display:block;font-size:.82em;font-weight:600;margin:0 0 4px;}
+.ighw-form input,.ighw-form textarea{width:100%;font:inherit;font-size:.92em;padding:9px 10px;
+  border:1px solid var(--ighw-border);border-radius:8px;background:transparent;color:inherit;
+  margin:0 0 12px;resize:vertical;}
+.ighw-form textarea{min-height:74px;}
+.ighw-form-count{font-size:.72em;opacity:.6;text-align:right;margin:-9px 0 12px;}
+.ighw-form-row{display:flex;gap:10px;}
+.ighw-form-row button{flex:1;font:inherit;font-size:.92em;font-weight:600;padding:11px;
+  border-radius:8px;cursor:pointer;border:1px solid var(--ighw-border);background:transparent;color:inherit;}
+.ighw-form-submit{background:#0095f6!important;color:#fff!important;border-color:#0095f6!important;}
+.ighw-form-row button:disabled{opacity:.6;cursor:default;}
+.ighw-form-err{color:#d33;font-size:.82em;margin:10px 0 0;}
 .ighw-lb{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.82);padding:4vh 4vw;}
 .ighw-lb[hidden]{display:none;}
@@ -498,12 +519,22 @@
     return blob || file;
   }
 
-  async function uploadPhoto(file, name) {
+  // Cloudinary context is `key=value|key=value`, so those two characters (and
+  // newlines) have to go or the metadata parses wrong.
+  function contextSafe(value, max) {
+    return String(value).replace(/[|=]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  }
+
+  async function uploadPhoto(file, name, caption) {
     const body = new FormData();
     body.append("file", await shrink(file));
     body.append("upload_preset", UPLOAD_PRESET);
     body.append("tags", UPLOAD_TAG);
-    if (name) body.append("context", `name=${name.replace(/[|=]/g, " ").slice(0, 60)}`);
+
+    const pairs = [];
+    if (name) pairs.push(`name=${contextSafe(name, 60)}`);
+    if (caption) pairs.push(`caption=${contextSafe(caption, 300)}`);
+    if (pairs.length) body.append("context", pairs.join("|"));
 
     const res = await fetch(`https://api.cloudinary.com/v1_1/${UPLOAD_CLOUD}/image/upload`, {
       method: "POST",
@@ -512,6 +543,102 @@
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error?.message || "Upload failed");
     return data;
+  }
+
+  let form = null;
+
+  function buildUploadForm() {
+    const overlay = el("div", "ighw-form");
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+
+    const card = el("div", "ighw-form-card");
+    const title = el("p", "ighw-form-title", "Add your photo");
+    const preview = el("img", "ighw-form-prev");
+    preview.alt = "";
+
+    const nameLabel = el("label", null, "Your name (optional)");
+    const name = el("input");
+    name.type = "text";
+    name.maxLength = 60;
+    name.placeholder = "e.g. Jordan";
+
+    const capLabel = el("label", null, "Description (optional)");
+    const caption = el("textarea");
+    caption.maxLength = 300;
+    caption.placeholder = "Say something about this photo\u2026";
+    const count = el("p", "ighw-form-count", "0 / 300");
+    caption.addEventListener("input", () => {
+      count.textContent = `${caption.value.length} / 300`;
+    });
+
+    const row = el("div", "ighw-form-row");
+    const cancel = el("button", null, "Cancel");
+    const submit = el("button", "ighw-form-submit", "Add to the wall");
+    cancel.type = submit.type = "button";
+    row.append(cancel, submit);
+
+    const error = el("p", "ighw-form-err", "");
+    card.append(title, preview, nameLabel, name, capLabel, caption, count, row, error);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    cancel.addEventListener("click", closeUploadForm);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeUploadForm(); });
+
+    form = { overlay, preview, name, caption, count, submit, cancel, error };
+    return form;
+  }
+
+  function closeUploadForm() {
+    if (!form) return;
+    form.overlay.hidden = true;
+    document.body.style.overflow = "";
+    if (form.preview.src.startsWith("blob:")) URL.revokeObjectURL(form.preview.src);
+    document.removeEventListener("keydown", onFormKey);
+  }
+
+  function onFormKey(e) {
+    if (e.key === "Escape") closeUploadForm();
+  }
+
+  function openUploadForm(file, button, note) {
+    if (!form) buildUploadForm();
+    form.preview.src = URL.createObjectURL(file);
+    form.name.value = "";
+    form.caption.value = "";
+    form.count.textContent = "0 / 300";
+    form.error.textContent = "";
+    form.submit.disabled = false;
+    form.submit.textContent = "Add to the wall";
+    form.overlay.hidden = false;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onFormKey);
+    setTimeout(() => form.name.focus(), 30);
+
+    form.submit.onclick = async () => {
+      form.submit.disabled = true;
+      form.cancel.disabled = true;
+      form.submit.textContent = "Uploading\u2026";
+      form.error.textContent = "";
+      try {
+        await uploadPhoto(file, form.name.value.trim(), form.caption.value.trim());
+        closeUploadForm();
+        button.textContent = "\u2713  Thanks! Your photo is on its way";
+        note.textContent = "It appears on the wall within a minute.";
+        setTimeout(() => {
+          button.textContent = "\uD83D\uDCF7  Add your photo";
+          note.textContent = "";
+        }, 6000);
+      } catch (err) {
+        form.error.textContent = err.message || "Upload failed \u2014 please try again.";
+        form.submit.textContent = "Add to the wall";
+      } finally {
+        form.submit.disabled = false;
+        form.cancel.disabled = false;
+      }
+    };
   }
 
   function buildUploader(root) {
@@ -526,28 +653,10 @@
 
     button.addEventListener("click", () => input.click());
 
-    input.addEventListener("change", async () => {
+    input.addEventListener("change", () => {
       const file = input.files && input.files[0];
       input.value = "";
-      if (!file) return;
-
-      const name = (window.prompt("Your name? (optional)") || "").trim();
-      button.disabled = true;
-      button.textContent = "Uploading\u2026";
-      note.textContent = "";
-      try {
-        await uploadPhoto(file, name);
-        button.textContent = "\u2713  Thanks! Your photo is on its way";
-        note.textContent = "It appears on the wall within a few minutes.";
-      } catch (err) {
-        button.textContent = "\uD83D\uDCF7  Add your photo";
-        note.textContent = err.message || "Upload failed — please try again.";
-      } finally {
-        setTimeout(() => {
-          button.disabled = false;
-          button.textContent = "\uD83D\uDCF7  Add your photo";
-        }, 4000);
-      }
+      if (file) openUploadForm(file, button, note);
     });
 
     root.append(button, note, input);

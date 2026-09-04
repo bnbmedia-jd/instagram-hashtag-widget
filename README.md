@@ -308,6 +308,10 @@ Admin API credentials used to *read* uploads stay in Actions secrets:
 Without those three secrets the upload source is simply skipped, so the feed
 keeps working.
 
+Guests are asked for an optional name and description before the photo is sent;
+both are stored as Cloudinary context metadata and render on the card and in the
+lightbox.
+
 Photos are downscaled in the browser to 1600px JPEG before upload, which keeps a
 3MB phone photo around 300KB — faster on venue wifi and far inside a free tier.
 Uploads publish automatically; remove an unwanted one by adding its id
