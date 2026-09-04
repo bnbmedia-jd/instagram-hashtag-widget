@@ -123,6 +123,7 @@
 .ighw-form-submit{background:var(--f-accent)!important;color:var(--f-accent-fg)!important;
   border-color:var(--f-accent)!important;}
 .ighw-form-row button:disabled{opacity:.45;cursor:default;}
+.ighw-form-row button[hidden]{display:none;}
 .ighw-form-err{color:#ff6b6b;font-size:.82em;margin:10px 0 0;}
 .ighw-lb{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;
   justify-content:center;background:rgba(0,0,0,.82);padding:4vh 4vw;}
@@ -707,7 +708,8 @@
 
     const row = el("div", "ighw-form-row");
     const cancel = el("button", null, "Cancel");
-    const submit = el("button", "ighw-form-submit", "Add to the wall");
+    const submit = el("button", "ighw-form-submit", "Post");
+    submit.hidden = true;
     cancel.type = submit.type = "button";
     row.append(cancel, submit);
 
@@ -737,16 +739,13 @@
     return form;
   }
 
-  // Submitting needs both a file and consent; the button says which is missing.
+  // Nothing to post until a file is chosen, so the button stays out of the way
+  // entirely rather than sitting there disabled.
   function refreshSubmitState() {
     if (!form) return;
-    const ready = Boolean(form.file) && form.agree.checked;
-    form.submit.disabled = !ready;
-    form.submit.textContent = !form.file
-      ? "Choose a file first"
-      : !form.agree.checked
-        ? "Tick the box to continue"
-        : "Add to the wall";
+    form.submit.hidden = !form.file;
+    form.submit.textContent = "Post";
+    form.submit.disabled = !(form.file && form.agree.checked);
   }
 
   function setChosenFile(file) {
