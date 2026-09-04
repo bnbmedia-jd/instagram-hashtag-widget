@@ -22,7 +22,9 @@
   const CARD_WIDTH = script.dataset.cardWidth || "240px";
   const LIGHTBOX = script.dataset.lightbox !== "false";
   const SHOW_HEADER = script.dataset.header !== "false";
-  const REFRESH_MS = 15 * 60 * 1000;
+  // Short by default: the feed is a small static JSON on a CDN, and a stale
+  // open tab is the biggest source of perceived lag after posting.
+  const REFRESH_MS = Math.max(parseInt(script.dataset.refresh || "60", 10), 15) * 1000;
 
   const CSS = `
 .ighw{--ighw-gap:12px;--ighw-radius:10px;--ighw-fg:inherit;--ighw-muted:#6b6b6b;

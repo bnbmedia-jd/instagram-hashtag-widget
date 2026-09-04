@@ -216,6 +216,29 @@ won't inherit your page's styling:
         style="width:100%;height:800px;border:0"></iframe>
 ```
 
+## Making a post appear immediately
+
+The scheduled poll runs every 5 minutes, but GitHub delays scheduled workflows
+under load — sometimes by 10–20 minutes — so it is not a guaranteed cadence.
+To force an immediate poll and redeploy:
+
+```bash
+./scripts/refresh.sh          # trigger and return
+./scripts/refresh.sh --watch  # trigger, wait, and report the live feed
+```
+
+Or from the browser: repo → Actions → Update hashtag feed → Run workflow. Either
+route puts a new post on the page in roughly 90 seconds.
+
+The embedded widget re-reads the feed every 60 seconds, so an already-open page
+picks up changes without a reload. Override with `data-refresh` (in seconds,
+minimum 15) if you want a different cadence:
+
+```html
+<script src="https://bnbmedia-jd.github.io/instagram-hashtag-widget/embed.js"
+        data-refresh="30" defer></script>
+```
+
 ## Notes and limits
 
 - `ig_hashtag_search` (resolving a hashtag name to its ID) is capped at **30

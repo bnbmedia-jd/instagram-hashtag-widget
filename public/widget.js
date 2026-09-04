@@ -1,4 +1,4 @@
-const REFRESH_MS = 15 * 60 * 1000;
+const REFRESH_MS = 60 * 1000;
 
 function escapeHtml(str) {
   const div = document.createElement("div");

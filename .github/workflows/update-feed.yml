@@ -2,9 +2,10 @@ name: Update hashtag feed
 
 on:
   schedule:
-    # Every 15 minutes. GitHub may delay scheduled runs under load; that's
-    # tolerable because Instagram's recent_media window is ~24h.
-    - cron: "*/15 * * * *"
+    # Every 5 minutes, the GitHub Actions minimum. Scheduled runs are still
+    # delayed under load, so use scripts/refresh.sh when a post needs to appear
+    # immediately.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
