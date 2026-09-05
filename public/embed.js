@@ -163,7 +163,14 @@
   .ighw-lb-media img,.ighw-lb-media video{max-height:45vh;}
   .ighw-lb-nav{display:none;}
 }
-.ighw-nomedia{background:linear-gradient(135deg,var(--ighw-card),var(--ighw-border));}
+/* Hashtag search returns neither media_url nor thumbnail_url for some posts
+   (typically Reels with licensed audio), so there is genuinely no image to
+   show. Make that read as intentional rather than as a broken tile. */
+.ighw-nomedia{background:linear-gradient(140deg,#3b2f4a,#1f2440);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:10px;text-align:center;}
+.ighw-nomedia-icon{font-size:1.6em;line-height:1;opacity:.85;}
+.ighw-nomedia-text{font-size:.68em;line-height:1.3;color:#cfd0e8;opacity:.9;}
 .ighw-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;
   font-size:.7em;padding:2px 6px;border-radius:4px;line-height:1.4;}
 .ighw-body{padding:10px 12px 12px;}
@@ -286,9 +293,17 @@
       wrap.appendChild(img);
     } else {
       wrap.classList.add("ighw-nomedia");
+      wrap.appendChild(el("div", "ighw-nomedia-icon", post.media_type === "VIDEO" ? "▶" : "◻"));
+      wrap.appendChild(
+        el("div", "ighw-nomedia-text", "View on Instagram")
+      );
     }
-    if (post.media_type === "CAROUSEL_ALBUM") wrap.appendChild(el("span", "ighw-badge", "◫"));
-    if (post.media_type === "VIDEO") wrap.appendChild(el("span", "ighw-badge", "▶"));
+    // The placeholder already carries a large play glyph; a corner badge as well
+    // just reads as a duplicate.
+    if (!wrap.classList.contains("ighw-nomedia")) {
+      if (post.media_type === "CAROUSEL_ALBUM") wrap.appendChild(el("span", "ighw-badge", "◫"));
+      if (post.media_type === "VIDEO") wrap.appendChild(el("span", "ighw-badge", "▶"));
+    }
     link.appendChild(wrap);
 
     const body = el("div", "ighw-body");
@@ -484,6 +499,15 @@
       img.src = still;
       img.alt = "";
       lb.media.appendChild(img);
+    } else {
+      const empty = el("div", "ighw-nomedia");
+      empty.style.width = "100%";
+      empty.style.minHeight = "260px";
+      empty.appendChild(el("div", "ighw-nomedia-icon", post.media_type === "VIDEO" ? "▶" : "◻"));
+      empty.appendChild(
+        el("div", "ighw-nomedia-text", "Instagram does not provide this media for display")
+      );
+      lb.media.appendChild(empty);
     }
     lb.user.textContent = post.username ? "@" + post.username : "";
     lb.time.textContent = post.timestamp ? timeAgo(post.timestamp) : "";
