@@ -226,7 +226,7 @@ and uploads can sit invisible for a long time.
 
 The fix is to trigger the workflow from a machine that is actually always on.
 `scripts/auto-refresh.sh` does that over the REST API, and
-`scripts/com.bnbmedia.igwidget.refresh.plist` runs it every two minutes via
+`scripts/com.bnbmedia.igwidget.refresh.plist` runs it every 30 minutes via
 launchd.
 
 Setup on the always-on Mac:
@@ -251,7 +251,7 @@ launchctl load ~/Library/LaunchAgents/com.bnbmedia.igwidget.refresh.plist
 ```
 
 Check it is running: `tail -f ~/.config/ig-widget/refresh.log` — one `ok` line
-every two minutes. To stop: `launchctl unload
+every 30 minutes. To stop: `launchctl unload
 ~/Library/LaunchAgents/com.bnbmedia.igwidget.refresh.plist`.
 
 The token file is read at run time and never committed. Delete the token when

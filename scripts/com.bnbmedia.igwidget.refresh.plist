@@ -13,9 +13,9 @@
     <string>/Users/CHANGEME/instagram-hashtag-widget/scripts/auto-refresh.sh</string>
   </array>
 
-  <!-- Every 2 minutes. -->
+  <!-- Every 30 minutes. -->
   <key>StartInterval</key>
-  <integer>120</integer>
+  <integer>1800</integer>
 
   <!-- Fire once at load so you get immediate confirmation it works. -->
   <key>RunAtLoad</key>

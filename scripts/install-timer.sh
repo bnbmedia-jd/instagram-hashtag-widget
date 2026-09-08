@@ -44,7 +44,7 @@ mkdir -p "$HOME/Library/LaunchAgents"
   echo '    <string>/bin/bash</string>'
   echo "    <string>$SCRIPT</string>"
   echo '  </array>'
-  echo '  <key>StartInterval</key><integer>120</integer>'
+  echo '  <key>StartInterval</key><integer>1800</integer>'
   echo '  <key>RunAtLoad</key><true/>'
   echo '  <key>StandardErrorPath</key><string>/tmp/igwidget-refresh.err</string>'
   echo '</dict>'
@@ -59,7 +59,7 @@ launchctl load "$PLIST" 2>/dev/null || launchctl bootstrap "gui/$(id -u)" "$PLIS
 
 if launchctl list | grep -q "$LABEL"; then
   echo
-  echo "Timer installed and running. It triggers a refresh every 2 minutes."
+  echo "Timer installed and running. It triggers a refresh every 30 minutes."
   echo "Watch it:  tail -f $LOG"
   echo "Stop it:   launchctl unload $PLIST"
 else
