@@ -1,11 +1,13 @@
 name: Update hashtag feed
 
 on:
-  schedule:
-    # Every 5 minutes, the GitHub Actions minimum. Scheduled runs are still
-    # delayed under load, so use scripts/refresh.sh when a post needs to appear
-    # immediately.
-    - cron: "*/5 * * * *"
+  # Closed after the 2026 festival: no scheduled polling, so the wall stays
+  # frozen at its final state. Uncomment to start collecting again.
+  # schedule:
+  #   # Every 5 minutes, the GitHub Actions minimum. Scheduled runs are still
+  #   # delayed under load, so use scripts/refresh.sh when a post needs to appear
+  #   # immediately.
+  #   - cron: "*/5 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -42,10 +44,13 @@ jobs:
           IG_ACCOUNTS: ${{ vars.IG_ACCOUNTS }}
           IG_SINCE: ${{ vars.IG_SINCE }}
           IG_INCLUDE_SELF: ${{ vars.IG_INCLUDE_SELF }}
-          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
-          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
-          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
-          CLOUDINARY_TAG: ${{ vars.CLOUDINARY_TAG }}
+          # Guest uploads are closed. Without these the fetch skips Cloudinary,
+          # so anything uploaded directly with the public preset is never
+          # published; uploads already in data/feed.json are kept.
+          # CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          # CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          # CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          # CLOUDINARY_TAG: ${{ vars.CLOUDINARY_TAG }}
         run: npm run fetch
 
       - name: Commit updated feed
